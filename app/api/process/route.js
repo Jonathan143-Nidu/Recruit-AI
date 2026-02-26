@@ -254,13 +254,12 @@ export async function POST(req) {
                 // [GARBAGE FILTER] Skip tiny files/logos that often result in "undefined" or junk in Drive
                 const isGarbage = !att.name || lowName.includes('image00') || lowName.includes('pixel') || lowName.includes('logo');
 
-                // [ANCHOR] Always save the file we actually read as a resume, if AI matched it, or if it looks like an ID/Visa
-                const isIdDocument = /dl|license|passport|visa|h1b|ead|i-94|i94|id_copy|identification|copy/.test(lowName);
-
+                // [ANCHOR] Always save the file we actually read as a resume, if AI matched it, or if it's an ID Document
+                const isImportantID = /dl|license|passport|visa|h1b|i-94|i94|ead|id[_\s-]?copy|copy/i.test(lowName);
                 const isMatched = matchedFiles.some(f => lowName.includes(f) || f.includes(lowName)) ||
                     fileName === primaryResumeFilename ||
-                    isIdDocument ||
-                    attachments.indexOf(att) === 0;
+                    attachments.indexOf(att) === 0 ||
+                    isImportantID;
 
                 if (att.contentBase64 && isMatched && !isGarbage) {
                     const fileId = await uploadFile(fileName, att.mimeType, att.contentBase64, candidateFolderId);
