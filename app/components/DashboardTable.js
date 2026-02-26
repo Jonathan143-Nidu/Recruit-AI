@@ -228,6 +228,45 @@ export default function DashboardTable({ data, headers, session }) {
         router.push('/match-results');
     };
 
+    // Action: Delete Selected candidates from DB
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleDelete = async () => {
+        if (!confirm(`Are you sure you want to completely delete ${selectedRows.size} candidate(s) from the Database?\n\nThis action cannot be undone.`)) {
+            return;
+        }
+
+        setIsDeleting(true);
+
+        const selectedIndices = Array.from(selectedRows).map(idx => {
+            // Find the original global row index taking filtering/sorting into account
+            // +2 to account for 0-indexing and the Header row in Google Sheets
+            return filteredData[idx].originalIndex + 2;
+        });
+
+        try {
+            const currentDb = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('db') || 'master' : 'master';
+            const res = await fetch('/api/candidates/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rowIndices: selectedIndices, dbType: currentDb })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                alert(`Successfully deleted ${selectedRows.size} candidate(s).`);
+                window.location.reload(); // Refresh immediately to show the updated table
+            } else {
+                alert(`Failed to delete: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            alert('An error occurred while deleting.');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     // Filter Input Handler
     const handleFilterChange = (field, value) => {
         setFilters(prev => ({ ...prev, [field]: value }));
