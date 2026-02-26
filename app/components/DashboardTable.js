@@ -508,6 +508,33 @@ export default function DashboardTable({ data, headers, session }) {
 
                         <div style={{ height: '20px', width: '1px', background: 'rgba(255,255,255,0.2)', margin: '0 2px' }} />
 
+                        {/* Delete Button */}
+                        {selectedRows.size > 0 && (
+                            <button className="dash-btn" onClick={handleDelete} disabled={isDeleting} style={{
+                                background: 'rgba(255,100,100,0.1)',
+                                color: '#fca5a5',
+                                border: '1px solid rgba(255,100,100,0.3)',
+                                padding: '0 10px',
+                                borderRadius: '10px',
+                                cursor: isDeleting ? 'not-allowed' : 'pointer',
+                                fontSize: '11px',
+                                fontWeight: '700',
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                                height: '34px',
+                                transition: 'all 0.3s',
+                                opacity: isDeleting ? 0.6 : 1
+                            }}>
+                                {isDeleting ? '...' : (
+                                    <>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        </svg>
+                                        Delete
+                                    </>
+                                )}
+                            </button>
+                        )}
+
                         {/* Analyze Button */}
                         <button className="dash-btn" onClick={handleAnalyze} disabled={selectedRows.size === 0} style={{
                             background: selectedRows.size > 0
