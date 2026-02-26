@@ -140,12 +140,7 @@ export async function POST(req) {
         // 3. [PRE-FLIGHT DEDUPLICATION CHECK]
         // To save AI and Drive quota, check if this thread or sender already exists in the destination sheet.
         try {
-            const sheetAuth = new google.auth.GoogleAuth({
-                credentials: JSON.parse(process.env.GOOGLE_SERVICE_API),
-                scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-            });
-            const sheets = google.sheets({ version: 'v4', auth: sheetAuth });
-
+            // [FIX] Use the pre-initialized 'sheets' instance from lib/google instead of parsing env variables
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId: targetSheetId,
                 range: 'Sheet1!A:Z'
