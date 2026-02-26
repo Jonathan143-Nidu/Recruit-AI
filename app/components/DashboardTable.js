@@ -60,7 +60,15 @@ export default function DashboardTable({ data, headers, session }) {
         const dateIdx = idx("Date"); // New: Smart Timeline Column
         const resumeSaysIdx = idx("Resume Says"); // New: Tab-specific index
 
-        const filtered = data.filter(row => {
+        // Attach original index to keep track of the row position in the Google Sheet 
+        // before sorting and filtering scrambles the array order.
+        const dataWithIndices = data.map((row, index) => {
+            // We append the original index as a hidden property on the array object itself
+            row.originalIndex = index;
+            return row;
+        });
+
+        const filtered = dataWithIndices.filter(row => {
             const name = nameIdx !== -1 ? row[nameIdx]?.toString().toLowerCase() || '' : '';
             const role = roleIdx !== -1 ? row[roleIdx]?.toString().toLowerCase() || '' : '';
             const exp = expIdx !== -1 ? row[expIdx]?.toString().toLowerCase() || '' : '';
