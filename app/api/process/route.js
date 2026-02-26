@@ -354,11 +354,17 @@ export async function POST(req) {
             : '--');
 
         mapData("Drive Folder", `=HYPERLINK("${driveFolderLink}", "Drive Folder")`);
+        mapData("Drive", `=HYPERLINK("${driveFolderLink}", "Drive")`);
         mapData("Resume", resumeLink ? `=HYPERLINK("${resumeLink}", "Resume")` : 'N/A');
         mapData("Sender", senderEmail || 'N/A');
         mapData("Thread", threadLink ? `=HYPERLINK("${threadLink}", "Thread")` : 'N/A');
         mapData("Processed By", processedBy || 'N/A');
         mapData("Fingerprint", threadId || 'N/A');
+
+        mapData("Visa", candidateData.Visa || 'N/A');
+        mapData("Location", candidateData.Location || 'N/A');
+        mapData("DOB", candidateData.DOB || 'N/A');
+        mapData("PPN", candidateData.PPN || 'N/A');
 
         await appendToSheet(rowData, targetSheetId);
 
@@ -382,10 +388,11 @@ async function extractCandidateData(subject, body, resumeText, attachments, proc
     3. Job titles/roles.
     4. Start dates and end dates for every project/job.
     5. Name.
-    6. Email.
-    7. Phone.
-    8. LinkedIn URL (if present).
-    9. Top_Skills: Extract a comma-separated list of the top 15 to 20 technical skills, programming languages, and frameworks found in the resume.
+    6. Email, Phone, LinkedIn URL (if present), and Location/City.
+    7. Visa/Work Authorization status (if mentioned in resume or attachments like H1B/EAD receipt).
+    8. Date of Birth (DOB) (if mentioned).
+    9. Passport Number (PPN) (if mentioned).
+    10. Top_Skills: Extract a comma-separated list of the top 15 to 20 technical skills, programming languages, and frameworks found in the resume.
 
     ### DATE SYNONYMS (TREAT AS FEB 24, 2026):
     Whenever you see these words, treat them as TODAY (February 24, 2026):
@@ -417,6 +424,10 @@ async function extractCandidateData(subject, body, resumeText, attachments, proc
       "Resume_Email": "Email address",
       "Resume_Phone": "Phone number",
       "LinkedIn_URL": "URL or 'Not found'",
+      "Location": "City, State or 'N/A'",
+      "Visa": "Visa status or 'N/A'",
+      "DOB": "Date of birth or 'N/A'",
+      "PPN": "Passport number or 'N/A'",
       "Documents_Found": "Resume, H1B, Passport, etc.",
       "Belongs_To_Me_Files": ["file1.pdf", "image2.jpg"]
     }
