@@ -139,6 +139,9 @@ export async function POST(req) {
 
         // 3. [PRE-FLIGHT DEDUPLICATION CHECK]
         // To save AI and Drive quota, check if this thread or sender already exists in the destination sheet.
+        let existingRows = [];
+        let emailIdx = -1;
+
         try {
             // [FIX] Use the pre-initialized 'sheets' instance from lib/google instead of parsing env variables
             const response = await sheets.spreadsheets.values.get({
@@ -146,15 +149,15 @@ export async function POST(req) {
                 range: 'Sheet1!A:Z'
             });
 
-            const rows = response.data.values || [];
-            if (rows.length > 1) {
-                const headers = rows[0];
+            existingRows = response.data.values || [];
+            if (existingRows.length > 1) {
+                const headers = existingRows[0];
                 const fingerprintIdx = headers.findIndex(h => h.toLowerCase() === 'fingerprint');
-                const emailIdx = headers.findIndex(h => h.toLowerCase() === 'email');
+                emailIdx = headers.findIndex(h => h.toLowerCase() === 'email');
 
                 // Check rows for exact duplicates
-                for (let i = 1; i < rows.length; i++) {
-                    const row = rows[i];
+                for (let i = 1; i < existingRows.length; i++) {
+                    const row = existingRows[i];
                     const existingFingerprint = fingerprintIdx !== -1 ? row[fingerprintIdx] : null;
                     const existingEmail = emailIdx !== -1 ? row[emailIdx] : null;
 
@@ -235,7 +238,29 @@ export async function POST(req) {
             };
         }
 
-        // 4. Determine or Create the Target Role Folder (Using Atomic Lock)
+        // 4.5 [DEEP DEDUPLICATION] Check if the extracted Candidate Email already exists (Handles Multi-Vendor scenario)
+        if (candidateData.Email && candidateData.Email.toLowerCase() !== 'n/a' && !candidateData.Email.toLowerCase().includes('not provide') && !candidateData.Email.toLowerCase().includes('check thread')) {
+            const cleanCandidateEmail = candidateData.Email.trim().toLowerCase();
+            if (emailIdx !== -1 && existingRows.length > 1) {
+                for (let i = 1; i < existingRows.length; i++) {
+                    const rowEmail = existingRows[i][emailIdx];
+                    if (rowEmail) {
+                        const cleanRowEmail = rowEmail.trim().toLowerCase();
+                        if (cleanRowEmail === cleanCandidateEmail) {
+                            console.log(`[DEEP DEDUPLICATION] Candidate ${cleanCandidateEmail} already exists (Sent by another vendor). Skipping ingestion.`);
+                            return NextResponse.json({
+                                success: true,
+                                skipped: true,
+                                reason: "Candidate already exists in the database from another source.",
+                                details: `Matched on candidate internal email: ${cleanCandidateEmail}`
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. Determine or Create the Target Role Folder (Using Atomic Lock)
         const roleFolderName = manualFolderName || candidateData.Role || 'General';
         let roleFolderId = manualFolderId;
 
