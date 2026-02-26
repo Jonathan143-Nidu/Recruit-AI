@@ -158,11 +158,21 @@ export async function POST(req) {
                     const existingFingerprint = fingerprintIdx !== -1 ? row[fingerprintIdx] : null;
                     const existingEmail = emailIdx !== -1 ? row[emailIdx] : null;
 
+                    // [FIX] Gmail 'From' often looks like: "John Doe" <john@example.com>. We need just the email.
+                    const extractEmail = (str) => {
+                        if (!str) return null;
+                        const match = str.match(/<([^>]+)>/);
+                        return match ? match[1].trim().toLowerCase() : str.trim().toLowerCase();
+                    };
+
+                    const cleanSenderEmail = extractEmail(senderEmail);
+                    const cleanExistingEmail = extractEmail(existingEmail);
+
                     if (
                         (threadId && existingFingerprint === threadId) ||
-                        (senderEmail && existingEmail && existingEmail.toLowerCase() === senderEmail.toLowerCase())
+                        (cleanSenderEmail && cleanExistingEmail && cleanExistingEmail === cleanSenderEmail)
                     ) {
-                        console.log(`[DEDUPLICATION] Skipping already processed candidate. Thread: ${threadId}, Email: ${senderEmail}`);
+                        console.log(`[DEDUPLICATION] Skipping already processed candidate. Thread: ${threadId}, Email: ${cleanSenderEmail}`);
                         return NextResponse.json({
                             success: true,
                             skipped: true,
