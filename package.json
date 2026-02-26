@@ -8,9 +8,18 @@
     "start": "next start"
   },
   "dependencies": {
+    "formidable": "^3.5.4",
+    "googleapis": "^171.4.0",
+    "mammoth": "^1.11.0",
     "next": "16.1.6",
+    "next-auth": "^4.24.13",
+    "nodemailer": "^7.0.13",
+    "openai": "^6.22.0",
+    "pdf-parse": "^2.4.5",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-quill-new": "^3.8.3",
+    "resend": "^6.9.2"
   },
   "devDependencies": {
     "@types/node": "^20",
