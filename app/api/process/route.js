@@ -8,6 +8,16 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 
+export const maxDuration = 300; // Allow 5 minute execution for large AI tasks
+
+export const config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '50mb', // Increase from default 4mb
+        },
+    },
+};
+
 // [FIX] Polyfill DOMMatrix & ImageData for pdf-parse/pdfjs-dist in Node environment
 // We FORCE override these because some Node environments have partial/broken Class-only versions 
 // that cause "Class constructor cannot be invoked without 'new'" errors.
