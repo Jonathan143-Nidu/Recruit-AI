@@ -1,22 +1,5 @@
 import { NextResponse } from 'next/server';
-import { decode } from 'next-auth/jwt';
-import { cookies } from 'next/headers';
-import { readJobs, writeJobs } from '../route'; // Import the new Drive-backed functions
-
-const ADMIN_EMAIL = 'careers@innovcentric.com';
-const SECRET = process.env.NEXTAUTH_SECRET || 'fallback_secret_for_dev_mode_only';
-
-async function isAdmin() {
-    const cookieStore = await cookies();
-    const sessionToken =
-        cookieStore.get('next-auth.session-token')?.value ||
-        cookieStore.get('__Secure-next-auth.session-token')?.value;
-
-    if (!sessionToken) return false;
-
-    const token = await decode({ token: sessionToken, secret: SECRET });
-    return token?.email === ADMIN_EMAIL;
-}
+import { readJobs, writeJobs, isAdmin } from '@/lib/jobsDb';
 
 // PUT — edit a job
 export async function PUT(req, context) {
