@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { decode } from 'next-auth/jwt';
 import { cookies } from 'next/headers';
+import { drive } from '@/lib/google'; // Added for Google Drive
+import { Readable } from 'stream';
 import fs from 'fs';
 import path from 'path';
 
-const JOBS_FILE = path.join(process.cwd(), 'data', 'jobs.json');
 const ADMIN_EMAIL = 'careers@innovcentric.com';
 const SECRET = process.env.NEXTAUTH_SECRET || 'fallback_secret_for_dev_mode_only';
+const DB_FILENAME = 'innovcentric-jobs-db.json';
 
 async function isAdmin() {
     const cookieStore = await cookies();
@@ -18,17 +20,79 @@ async function isAdmin() {
     return token?.email === ADMIN_EMAIL;
 }
 
-function readJobs() {
+async function getDbFileId() {
+    const parentId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+    const res = await drive.files.list({
+        q: `name='${DB_FILENAME}' and '${parentId}' in parents and trashed=false`,
+        fields: 'files(id)',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+    });
+    return res.data.files && res.data.files.length > 0 ? res.data.files[0].id : null;
+}
+
+export async function readJobs() {
     try {
-        const data = fs.readFileSync(JOBS_FILE, 'utf-8');
-        return JSON.parse(data);
-    } catch {
+        const fileId = await getDbFileId();
+        if (!fileId) {
+            // [MIGRATION] If Drive DB doesn't exist yet, read the local jobs.json and upload it
+            const JOBS_FILE = path.join(process.cwd(), 'data', 'jobs.json');
+            let initialJobs = [];
+            try {
+                if (fs.existsSync(JOBS_FILE)) {
+                    initialJobs = JSON.parse(fs.readFileSync(JOBS_FILE, 'utf-8'));
+                }
+            } catch (fsErr) {
+                console.warn("Could not read local jobs.json fallback:", fsErr);
+            }
+
+            // Auto-seed Google Drive with the local data
+            if (initialJobs.length > 0) {
+                await writeJobs(initialJobs);
+            }
+            return initialJobs;
+        }
+
+        const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'text' });
+        // Depending on googleapis version, it might automatically parse JSON or return as string
+        const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+        return Array.isArray(data) ? data : [];
+    } catch (e) {
+        console.error("Error reading jobs from Drive:", e.message);
         return [];
     }
 }
 
-function writeJobs(jobs) {
-    fs.writeFileSync(JOBS_FILE, JSON.stringify(jobs, null, 2));
+export async function writeJobs(jobs) {
+    const fileId = await getDbFileId();
+    const jsonStr = JSON.stringify(jobs, null, 2);
+
+    // Convert string to a readable stream for upload
+    const stream = new Readable();
+    stream.push(Buffer.from(jsonStr, 'utf-8'));
+    stream.push(null);
+
+    const media = {
+        mimeType: 'application/json',
+        body: stream,
+    };
+
+    if (fileId) {
+        await drive.files.update({
+            fileId: fileId,
+            media: media,
+            supportsAllDrives: true,
+        });
+    } else {
+        await drive.files.create({
+            requestBody: {
+                name: DB_FILENAME,
+                parents: [process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID]
+            },
+            media: media,
+            supportsAllDrives: true,
+        });
+    }
 }
 
 function generateJobId(jobs) {
@@ -48,7 +112,7 @@ function generateJobId(jobs) {
 export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const fetchAll = searchParams.get('all') === 'true';
-    const jobs = readJobs();
+    const jobs = await readJobs(); // Changed to await
 
     if (fetchAll) {
         if (await isAdmin()) {
@@ -72,7 +136,7 @@ export async function POST(req) {
         return NextResponse.json({ error: 'Title and description are required' }, { status: 400 });
     }
 
-    const jobs = readJobs();
+    const jobs = await readJobs(); // Changed to await
     const newJob = {
         id: Date.now().toString(),
         jobId: generateJobId(jobs),
@@ -90,7 +154,7 @@ export async function POST(req) {
     };
 
     jobs.push(newJob);
-    writeJobs(jobs);
+    await writeJobs(jobs); // Changed to await
 
     return NextResponse.json(newJob, { status: 201 });
 }
