@@ -47,8 +47,9 @@ export default function JobsPage() {
     const fetchJobs = async () => {
         setLoading(true);
         try {
-            const url = isAdmin ? '/api/jobs?all=true' : '/api/jobs';
-            const res = await fetch(url);
+            const baseUrl = isAdmin ? '/api/jobs?all=true' : '/api/jobs';
+            const url = `${baseUrl}${isAdmin ? '&' : '?'}t=${Date.now()}`;
+            const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             const sorted = Array.isArray(data) ? data.sort((a, b) => new Date(b.posted) - new Date(a.posted)) : [];
             setJobs(sorted);

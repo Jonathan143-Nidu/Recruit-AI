@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { readJobs, writeJobs, isAdmin } from '@/lib/jobsDb';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // PUT — edit a job
 export async function PUT(req, context) {
     if (!(await isAdmin())) {

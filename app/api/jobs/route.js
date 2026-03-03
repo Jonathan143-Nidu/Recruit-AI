@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { readJobs, writeJobs, isAdmin } from '@/lib/jobsDb';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 function generateJobId(jobs) {
     let max = 0;
     for (const job of jobs) {
