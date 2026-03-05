@@ -642,16 +642,10 @@ async function createFolder(name, parentId) {
 // Helper: Upload File
 async function uploadFile(name, mimeType, base64Content, parentId) {
     const buffer = Buffer.from(base64Content, 'base64');
-    const { Readable } = require('stream');
 
     const MAX_RETRIES = 3;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-            // Create fresh stream for each attempt
-            const stream = new Readable();
-            stream.push(buffer);
-            stream.push(null);
-
             const res = await drive.files.create({
                 requestBody: {
                     name: name,
@@ -659,7 +653,7 @@ async function uploadFile(name, mimeType, base64Content, parentId) {
                 },
                 media: {
                     mimeType: mimeType,
-                    body: stream,
+                    body: buffer,
                 },
                 fields: 'id, webViewLink',
                 supportsAllDrives: true,
