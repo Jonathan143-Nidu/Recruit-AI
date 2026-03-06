@@ -121,6 +121,8 @@ export async function POST(req) {
         // 2. Parse Text content from ALL attachments (Resume, Visa Docs, etc.)
         let resumeText = '';
         let primaryResumeFilename = ''; // Anchor: Keep track of which file actually gave us the text
+        const requestUploadedFiles = body.uploadedFiles || []; // [NEW] Pre-uploaded directly from Chrome Extension
+
         if (attachments && attachments.length > 0) {
             for (const att of attachments) {
                 const lowerName = (att.name || "").toLowerCase();
@@ -135,7 +137,27 @@ export async function POST(req) {
                     lowerName.endsWith('.txt')) {
 
                     try {
-                        const text = await parseAttachmentText(att);
+                        let text = '';
+                        if (att.contentBase64) {
+                            text = await parseAttachmentText(att);
+                        } else {
+                            // [DRIVE BYPASS] The extension uploaded this directly and stripped the Base64 to save bandwidth.
+                            // We need to fetch the file from Drive to parse its text content for the AI.
+                            const matchedUpload = requestUploadedFiles.find(u => u.name === att.name);
+                            if (matchedUpload && matchedUpload.id) {
+                                console.log(`[DRIVE BYPASS] Fetching ${att.name} from Drive for text extraction...`);
+                                const driveFileRes = await drive.files.get({ fileId: matchedUpload.id, alt: 'media' }, { responseType: 'stream' });
+
+                                const chunks = [];
+                                for await (const chunk of driveFileRes.data) {
+                                    chunks.push(chunk);
+                                }
+                                const buffer = Buffer.concat(chunks);
+                                const tempAtt = { name: att.name, contentBase64: buffer.toString('base64') };
+                                text = await parseAttachmentText(tempAtt);
+                            }
+                        }
+
                         if (text) {
                             resumeText += `\n\n--- Document: ${att.name} ---\n${text}`;
                             if (!primaryResumeFilename) primaryResumeFilename = att.name;
@@ -284,7 +306,39 @@ export async function POST(req) {
 
         // 6. Save Attachments (with Matchmaker 2.1 Filter)
         const uploadedFiles = [];
-        if (attachments && attachments.length > 0) {
+
+        // PATH A: Files were already uploaded directly to Google Drive by the Extension
+        if (requestUploadedFiles && requestUploadedFiles.length > 0) {
+            console.log(`[DRIVE BYPASS] Processing ${requestUploadedFiles.length} pre-uploaded files...`);
+            for (const uploadedFile of requestUploadedFiles) {
+                if (!uploadedFile.id) continue;
+
+                // Move the file from the Root (where the Extension uploaded it) into the specific Candidate Folder
+                try {
+                    const fileObj = await drive.files.get({
+                        fileId: uploadedFile.id,
+                        fields: 'parents'
+                    });
+
+                    const previousParents = fileObj.data.parents ? fileObj.data.parents.join(',') : '';
+
+                    await drive.files.update({
+                        fileId: uploadedFile.id,
+                        addParents: candidateFolderId,
+                        removeParents: previousParents,
+                        fields: 'id, parents'
+                    });
+
+                    const fileLink = `https://drive.google.com/file/d/${uploadedFile.id}/view`;
+                    uploadedFiles.push({ name: uploadedFile.name, link: fileLink });
+                    console.log(`[DRIVE BYPASS] Successfully moved ${uploadedFile.name} into Candidate Folder`);
+                } catch (moveErr) {
+                    console.error(`[DRIVE BYPASS ERROR] Failed to move file ${uploadedFile.id} to folder ${candidateFolderId}:`, moveErr.message);
+                }
+            }
+        }
+        // PATH B: Legacy Base64 Upload (for backwards compatibility with old extensions or small payloads)
+        else if (attachments && attachments.length > 0) {
             const matchedFiles = (candidateData.Belongs_To_Me_Files || []).map(f => f.toLowerCase());
 
             for (const att of attachments) {
