@@ -15,6 +15,7 @@ export default async function middleware(req) {
         pathname.startsWith("/api/jobs") ||   // public jobs API
         pathname.startsWith("/api/process") || // [FIX] Allow internal sync calls (backed by accessCode)
         pathname.startsWith("/api/folders") || // [FIX] Allow extension to fetch folders
+        pathname.startsWith("/api/drive") ||   // [FIX] Allow extension to fetch drive tokens
         pathname.startsWith("/_next") ||
         pathname.includes(".") // static files
     ) {
@@ -31,5 +32,5 @@ export default async function middleware(req) {
 }
 
 export const config = {
-    matcher: ["/((?!api/auth|api/process|api/folders|_next/static|_next/image|favicon.ico).*)"],
+    matcher: ["/((?!api/auth|api/process|api/folders|api/drive|_next/static|_next/image|favicon.ico).*)"],
 };
