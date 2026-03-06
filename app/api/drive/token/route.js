@@ -35,13 +35,25 @@ export async function GET(request) {
             token: tokenResponse.token,
             // The extension needs the Parent Folder ID to know where to create role folders
             parentFolderId: process.env.GMAIL_SYNC_DRIVE_FOLDER_ID || process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID
+        }, {
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            }
         });
 
     } catch (error) {
         console.error("Token Generation Error:", error);
         return NextResponse.json(
             { success: false, error: error.message || "Failed to generate Drive token" },
-            { status: 500 }
+            {
+                status: 500,
+                headers: { 'Access-Control-Allow-Origin': '*' }
+            }
         );
     }
 }
+
+
+export async function OPTIONS() { return new Response(null, { status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', } }); }
