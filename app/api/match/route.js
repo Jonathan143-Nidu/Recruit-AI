@@ -235,39 +235,88 @@ async function downloadFileContent(fileId) {
 
 async function analyzeCandidate(name, resumeText, jd, userEmail) {
     const prompt = `
-    Role: Expert Technical Recruiter & Forensic Resume Analyst.
-    Task: Execute a "Deep Reasoning" comparison of the Candidate Resume against the Job Description (JD).
+    Confirmed Rule Set:
+    API Key Usage: I will operate under the assumption that API access is available and configured as needed for specific tasks (like web search).
+    Deep Think (Reasoning): For any complex reasoning, analysis, problem-solving, or multi-step planning, I will explicitly engage my internal reasoning process (the "deep think" step) before providing a final answer. I will structure this thought process clearly in my response.
+    Web Search: When a query requires current, real-time, or highly specific factual information not contained in my training data, I will automatically invoke the web search function to gather the necessary data. I will then synthesize this information to provide an accurate, up-to-date answer.
+    Example of How I Will Proceed:
+    For a user query like: "What are the latest breakthrough treatments for rheumatoid arthritis, and what might be their long-term economic impact?"
+    My process would be:
+    Acknowledge & Plan: Recognize the need for current info (search) and complex analysis (reasoning).
+    Execute Search: Use the web search tool to find recent medical news and economic analyses.
+    Deep Think: Analyze the search results, compare treatments, evaluate economic factors (cost, productivity, healthcare burden), and structure a coherent response.
+    Deliver Final Answer: Present a synthesized answer that cites sources, outlines reasoning, and provides a balanced conclusion.
+    I am ready to assist under these guidelines. Please proceed with your query.
 
-    Candidate Name: ${name}
+    DESIRED OUTPUT:
+    Missing Skills:
+    | Missing Skills | JD Req | Has |
+    • .NET | (language listed in JD) | 0m
+    • AWS S3 | (service listed in JD) | 0m
+    • Jenkins | (CI/CD tool listed in JD) | 0m
+    • Terraform / CloudFormation | (IaC listed in JD) | 0m
+    • Jest | (testing listed in JD) | 0m
+    • Snowflake | (desired data platform) | 0m
+    • Asset Management / Investment Banking / Wealth Management domain knowledge (OMS/PMS, fund lifecycle, ETF platforms, risk engines) | (desired domain experience) | 0m
+    • ESG data / performance attribution / regulatory reporting exposure | (desired domain exposure) | 0m
+    • Proven leadership in matrix environments (explicit) | (leadership style listed in JD) | 0m
+    • Professional certifications (AWS, Snowflake, finance/industry-related certs) | (not listed on resume) | Missing
 
+    Partial Match:
+     Partial Match Skills | JD Req | Has |
+     • Software Engineering Experience (15+ years) | 180m | 117m |
+     • Leadership Experience (6+ years) | 72m | 68m |
+    • PySpark | 60m | 55m
+
+    PROMPT: 
     Analyze all skills and certifications in JD and resume
-    try deep reasoning mode. 
-    analyze the resume and JD inch to inch then give the match, missing and partial skills and certifications.
+    Work on  deep reasoning mode. 
+    analyze the resume and JD inch by inch then give the match, missing and partial skills and certifications in desired output format; and make sure the result is always the same if we trigger this prompt.
 
-    Job Description:
+    JD:
     ${jd.substring(0, 5000)}
 
     Resume Text:
     ${resumeText.substring(0, 50000)}
 
-    Consider years or months of any skill only if mentioned in JD.
+    Consider years or months of any skill, only if mentioned in JD and give the result as partial match. If years or months of any skill is not mentioned in JD, give only missing skills result and avoid partial match skills result in desired output.
 
-    STRICT CATEGORIZATION RULES:
-    1. If the candidate has 0 months (0m) of a required skill, it MUST be listed in "Missing Skills".
-    2. A skill is a "Partial Match" ONLY if the candidate has MORE than 0m experience, but less than the JD requirement.
-    3. If there are NO Partial Match skills with >0m experience, do NOT include a Partial Match section in the reasoning or output.
-    4. STRICT CERTIFICATION CLASSIFICATION:
-        - Any item that is a certification (contains keywords: "Certification", "Certified", "Professional", "Expert", "Associate", "CDMP", "TOGAF", "DAMA", "SnowPro") MUST be listed in "Missing Certifications" and NEVER in "Missing Skills".
-        - "Missing Skills" is strictly for technical skills, tools, and languages (e.g., Python, SQL, Snowflake, Databricks).
+    Take output of match, Partial Match, Missing skills and  certifications; keep in your memory.
+    Strict 0-Month Categorization
+    Any skill for which the candidate has 0 months of experience must be placed in the Missing Skills category.
+    This overrides any job description requirement (e.g., requested duration is ignored for 0‑month cases).
+    No 0‑month skill shall appear under “Partial Match” or any other category.
 
-    STRICT OUTPUT RULES:
-    - Every skill entry must be EXACTLY ONE LINE.
-    - Do NOT add any notes, justifications, or descriptive text below the skill line.
-    - The "Has" column MUST ONLY contain a numerical value (e.g., "12m", "5y", "0m").
+    Give result of Partial match skills and Missing skills like
 
-    After processing all above scenarios give me desired output as below in the "gapAnalysis" field of the JSON.
+    Missing Skills:
+    | Missing Skills | JD Req | Has |
+    • .NET | (language listed in JD) | 0m
+    • AWS S3 | (service listed in JD) | 0m
+    • Jenkins | (CI/CD tool listed in JD) | 0m
+    • Terraform / CloudFormation | (IaC listed in JD) | 0m
+    • Jest | (testing listed in JD) | 0m
+    • Snowflake | (desired data platform) | 0m
+    • Asset Management / Investment Banking / Wealth Management domain knowledge (OMS/PMS, fund lifecycle, ETF platforms, risk engines) | (desired domain experience) | 0m
+    • ESG data / performance attribution / regulatory reporting exposure | (desired domain exposure) | 0m
+    • Proven leadership in matrix environments (explicit) | (leadership style listed in JD) | 0m
+    • Professional certifications (AWS, Snowflake, finance/industry-related certs) | (not listed on resume) | Missing
 
-    Output Format: JSON string ONLY.
+    Partial Match:
+     Partial Match Skills | JD Req | Has |
+     • Software Engineering Experience (15+ years) | 180m | 117m |
+     • Leadership Experience (6+ years) | 72m | 68m |
+    • PySpark | 60m | 55m
+
+    Give result of match percentage of resume to JD as
+    (match skills +Partial skills) %
+    Missing skills %
+    so that (match skills +Partial skills %) + (Missing skills %) from resume is 100% to JD.
+
+    After processing all above scenarios give me desired output as below under the "gapAnalysis" field in the JSON response.
+
+    OUTPUT FORMAT: JSON ONLY
+
     {
         "internalReasoning": "Brief summary of reasoning",
         "matchPercentage": Number,
@@ -281,10 +330,27 @@ async function analyzeCandidate(name, resumeText, jd, userEmail) {
             { "skill": "Skill Name", "req": "X months", "has": "0m" }
         ],
         "missingCertifications": ["Certification Name"],
-        "gapAnalysis": "DESIRED OUTPUT:\n\nMissing Skills:\n| Missing Skills | JD Req | Has |\n| :--- | :--- | :--- |\n• [Skill Name] | [Req] | 0m\n...\n\nMissing Certifications:\n| Missing Certifications |\n| :--- |\n• [Certification Name]\n...\n\nPartial Match Skills:\n| Partial Match Skills | JD Req | Has |\n| :--- | :--- | :--- |\n• [Skill Name] | [Req] | [Has]\n...\n\nResume Percentage to JD:\n(match skills +Partial skills) % \nMissing skills %"
+        "gapAnalysis": "DESIRED OUTPUT:\n\nMissing Skills:\n| Missing Skills | JD Req | Has |\n| :--- | :--- | :--- |\n• [Skill Name] | [Req] | 0m\n...\n\nPartial Match Skills:\n| Partial Match Skills | JD Req | Has |\n| :--- | :--- | :--- |\n• [Skill Name] | [Req] | [Has]\n...\n\nResume Percentage to JD:\n(match skills +Partial skills) %\nMissing skills %"
     }
 
-    STRICT: Return ONLY valid JSON. No other text.
+    if no Partial Match skills ignore Partial Match  in output.
+    DESIRED OUTPUT:
+    Missing Skills:
+    | Missing Skills | JD Req | Has |
+    • .NET | (language listed in JD) | 0m
+    • AWS S3 | (service listed in JD) | 0m
+    • Jenkins | (CI/CD tool listed in JD) | 0m
+    • Terraform / CloudFormation | (IaC listed in JD) | 0m
+    • Jest | (testing listed in JD) | 0m
+    • Snowflake | (desired data platform) | 0m
+    • Asset Management / Investment Banking / Wealth Management domain knowledge (OMS/PMS, fund lifecycle, ETF platforms, risk engines) | (desired domain experience) | 0m
+    • ESG data / performance attribution / regulatory reporting exposure | (desired domain exposure) | 0m
+    • Proven leadership in matrix environments (explicit) | (leadership style listed in JD) | 0m
+    • Professional certifications (AWS, Snowflake, finance/industry-related certs) | (not listed on resume) | Missing
+
+    Resume Percentage to JD: 
+    (match skills +Partial skills) %
+    Missing skills %
     `;
 
     try {
