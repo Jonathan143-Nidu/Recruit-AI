@@ -248,30 +248,17 @@ async function analyzeCandidate(name, resumeText, jd, userEmail) {
     Deliver Final Answer: Present a synthesized answer that cites sources, outlines reasoning, and provides a balanced conclusion.
     I am ready to assist under these guidelines. Please proceed with your query.
 
-    DESIRED OUTPUT:
-    Missing Skills:
-    | Missing Skills | JD Req | Has |
-    • .NET | (language listed in JD) | 0m
-    • AWS S3 | (service listed in JD) | 0m
-    • Jenkins | (CI/CD tool listed in JD) | 0m
-    • Terraform / CloudFormation | (IaC listed in JD) | 0m
-    • Jest | (testing listed in JD) | 0m
-    • Snowflake | (desired data platform) | 0m
-    • Asset Management / Investment Banking / Wealth Management domain knowledge (OMS/PMS, fund lifecycle, ETF platforms, risk engines) | (desired domain experience) | 0m
-    • ESG data / performance attribution / regulatory reporting exposure | (desired domain exposure) | 0m
-    • Proven leadership in matrix environments (explicit) | (leadership style listed in JD) | 0m
-    • Professional certifications (AWS, Snowflake, finance/industry-related certs) | (not listed on resume) | Missing
-
-    Partial Match:
-     Partial Match Skills | JD Req | Has |
-     • Software Engineering Experience (15+ years) | 180m | 117m |
-     • Leadership Experience (6+ years) | 72m | 68m |
-    • PySpark | 60m | 55m
-
     PROMPT: 
     Analyze all skills and certifications in JD and resume
-    Work on  deep reasoning mode. 
+    Work on deep reasoning mode. 
     analyze the resume and JD inch by inch then give the match, missing and partial skills and certifications in desired output format; and make sure the result is always the same if we trigger this prompt.
+
+    STRICT STEP-BY-STEP CHECKLIST RULES:
+    1. First, EXTRACT a rigid list of every single mandatory skill required by the JD.
+    2. Second, SEARCH the resume text strictly for those exact skills (or direct industry synonyms).
+    3. Do NOT guess or invent skills. If it is not explicitly written in the resume text, it does not exist.
+    4. Do NOT include skills in your final output that were not explicitly asked for in the JD.
+    5. CONSISTENCY CHECK: Before finalizing your output, verify that every single "Missing" skill was actually asked for in the JD. 
 
     JD:
     ${jd.substring(0, 5000)}
@@ -281,11 +268,16 @@ async function analyzeCandidate(name, resumeText, jd, userEmail) {
 
     Consider years or months of any skill, only if mentioned in JD and give the result as partial match. If years or months of any skill is not mentioned in JD, give only missing skills result and avoid partial match skills result in desired output.
 
-    Take output of match, Partial Match, Missing skills and  certifications; keep in your memory.
+    Take output of match, Partial Match, Missing skills and certifications; keep in your memory.
+    
     Strict 0-Month Categorization
     Any skill for which the candidate has 0 months of experience must be placed in the Missing Skills category.
     This overrides any job description requirement (e.g., requested duration is ignored for 0‑month cases).
     No 0‑month skill shall appear under “Partial Match” or any other category.
+
+    STRICT PARTIAL MATCH LIMITS:
+    A skill is ONLY a "Partial Match" if the candidate has MORE than 0 months of experience BUT LESS than the JD requires.
+    If a candidate has EQUAL TO or MORE YEARS than the JD explicitly requires, it is a FULL MATCH. Do NOT place it in the Partial Match list. 
 
     Give result of Partial match skills and Missing skills like
 
