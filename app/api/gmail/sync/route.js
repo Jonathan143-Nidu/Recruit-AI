@@ -36,11 +36,17 @@ export async function POST(req) {
             console.warn("Could not fetch existing IDs from sheet (might be empty):", sheetError.message);
         }
 
-        // 3. Build Gmail Search Query (STRICT ATTACHMENTS + DYNAMIC SUBJECT)
-        let query = `has:attachment`;
-        if (subject) query += ` subject:"${subject}"`;
+        // 3. Build Gmail Search Query (SPECIFIC DOCUMENT FILTER + RELAXED + INCLUSIVE DATES)
+        let query = `has:attachment (filename:pdf OR filename:docx OR filename:doc OR filename:txt)`;
+        if (subject) query += ` subject:${subject}`; 
         if (startDate) query += ` after:${startDate.replace(/-/g, '/')}`;
-        if (endDate) query += ` before:${endDate.replace(/-/g, '/')}`;
+        if (endDate) {
+            // [FIX] Gmail API 'before' is non-inclusive. We add 1 day to ensure the final day is searched.
+            const end = new Date(endDate);
+            end.setDate(end.getDate() + 1);
+            const nextDayStr = end.toISOString().split('T')[0].replace(/-/g, '/');
+            query += ` before:${nextDayStr}`;
+        }
 
         console.log("Gmail Query:", query);
 
@@ -53,26 +59,33 @@ export async function POST(req) {
                 userId: 'me',
                 q: query,
                 pageToken: nextPageToken,
-                maxResults: 100 // Fetch in chunks of 100
+                maxResults: 500 // Maximize page size
             });
 
             if (msgRes.data.messages) {
                 allMessages.push(...msgRes.data.messages);
+                console.log(`[SYNC] Page fetched. Total so far: ${allMessages.length}`);
             }
             nextPageToken = msgRes.data.nextPageToken;
         } while (nextPageToken);
+
+        const rawGmailCount = allMessages.length;
+        console.log(`[SYNC] Raw Gmail search found ${rawGmailCount} messages.`);
 
         if (allMessages.length === 0) {
             return NextResponse.json({ success: true, count: 0, candidates: [] });
         }
 
         // 5. Filter for candidates NOT in our "Already Processed" set
+        // [FIX] We now track by messageId to match Gmail's individual message view.
         const unfilteredMessages = [];
         const seenInThisBatch = new Set();
 
         for (const msg of allMessages) {
-            if (!existingIds.has(msg.threadId) && !seenInThisBatch.has(msg.threadId)) {
-                seenInThisBatch.add(msg.threadId);
+            // [FIX] Previously dedualicated by threadId, which hid sequential emails.
+            // We now permit all unique message IDs unless they were explicitly processed.
+            if (!existingIds.has(msg.id) && !seenInThisBatch.has(msg.id)) {
+                seenInThisBatch.add(msg.id);
                 unfilteredMessages.push(msg);
             }
         }
@@ -121,8 +134,9 @@ export async function POST(req) {
 
         return NextResponse.json({
             success: true,
-            totalFound: allMessages.length,
-            uniqueCount: candidates.length,
+            totalFoundInGmail: rawGmailCount,
+            totalFilterExcluded: rawGmailCount - unfilteredMessages.length,
+            candidatesCount: candidates.length,
             candidates
         });
 

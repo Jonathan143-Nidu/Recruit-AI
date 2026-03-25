@@ -3,33 +3,42 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import LiveProgressTracker from '@/components/LiveProgressTracker';
 
 export default function GmailSyncPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
 
-    // Search State
+    // --- Search State ---
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();
-        d.setDate(d.getDate() - 7); // Default to last 7 days
+        d.setDate(d.getDate() - 7);
         return d.toISOString().split('T')[0];
     });
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-    const [subject, setSubject] = useState('Java'); // Default provided by user
+    const [subject, setSubject] = useState('Java');
 
-    // Destination Settings
-    const [destType, setDestType] = useState('new'); // 'new' or 'existing'
-    const [newFolderName, setNewFolderName] = useState('Java'); // Match subject by default
+    // --- Destination Settings ---
+    const [destType, setDestType] = useState('new'); // 'new' | 'existing'
+    const [newFolderName, setNewFolderName] = useState('Java');
     const [existingFolderId, setExistingFolderId] = useState('');
     const [existingFolders, setExistingFolders] = useState([]);
     const [isLoadingFolders, setIsLoadingFolders] = useState(false);
 
+    // --- Results & Processing ---
+    const [candidates, setCandidates] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [logs, setLogs] = useState([]);
+
+    // --- Elite Traffic Controller (Mismatches) ---
+    const [mismatches, setMismatches] = useState([]);
+    const [showReview, setShowReview] = useState(false);
+
+    // Auth Redirect
     useEffect(() => {
-        if (status === 'authenticated') {
-            loadFolders();
-        }
-    }, [status]);
+        if (status === 'unauthenticated') router.push('/login');
+        if (status === 'authenticated') loadFolders();
+    }, [status, router]);
 
     const loadFolders = async () => {
         setIsLoadingFolders(true);
@@ -38,50 +47,16 @@ export default function GmailSyncPage() {
             const data = await res.json();
             if (data.folders) setExistingFolders(data.folders);
         } catch (e) {
-            console.error("Failed to load folders:", e);
+            console.error("Folders failed:", e);
+        } finally {
+            setIsLoadingFolders(false);
         }
-        setIsLoadingFolders(false);
     };
-
-    // Results State
-    const [candidates, setCandidates] = useState([]);
-    const [isSearching, setIsSearching] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [isSyncingAll, setIsSyncingAll] = useState(false);
-    const [processedCount, setProcessedCount] = useState(0);
-
-    // Review Window (Mismatches)
-    const [mismatches, setMismatches] = useState([]); // { candidate, suggestedRole }
-    const [showReview, setShowReview] = useState(false);
-
-    const checkMismatch = (detectedRole, targetRole) => {
-        if (!targetRole || !detectedRole) return false;
-        const target = targetRole.toLowerCase();
-        const detected = detectedRole.toLowerCase();
-        return !detected.includes(target); // Basic fuzzy check
-    };
-
-    // Terminal State
-    const [logs, setLogs] = useState([
-        { time: new Date().toLocaleTimeString(), type: 'success', message: '📡 Gmail Forensic Engine Ready.' }
-    ]);
-
-    // Redirect if not logged in
-    useEffect(() => {
-        if (status === 'unauthenticated') {
-            router.push('/login');
-        }
-    }, [status, router]);
 
     const handleSearch = async () => {
         setIsSearching(true);
         setCandidates([]);
-        setLogs(prev => [...prev, {
-            time: new Date().toLocaleTimeString(),
-            type: 'info',
-            message: `🔍 Scanning Gmail from ${startDate} to ${endDate}...`
-        }]);
-
+        setLogs(["Starting Gmail scan...", `Criteria: SUBJECT="${subject}"`, `Range: ${startDate} to ${endDate}`]);
         try {
             const res = await fetch('/api/gmail/sync', {
                 method: 'POST',
@@ -89,92 +64,60 @@ export default function GmailSyncPage() {
                 body: JSON.stringify({ startDate, endDate, subject })
             });
             const data = await res.json();
-
             if (data.success) {
                 setCandidates(data.candidates || []);
-                setLogs(prev => [...prev, {
-                    time: new Date().toLocaleTimeString(),
-                    type: 'success',
-                    message: `✅ Found ${data.totalFound} messages. ${data.uniqueCount} are NEW candidates.`
-                }]);
-            } else {
-                throw new Error(data.error || 'Search failed');
+                const logs = [`Found ${data.totalFoundInGmail || 0} matching in Gmail.`];
+                if (data.totalFilterExcluded > 0) logs.push(`Excluded ${data.totalFilterExcluded} already processed.`);
+                logs.push(`Ready for sync: ${data.candidatesCount || 0}`);
+                setLogs(prev => [...prev.slice(-10), ...logs]);
             }
-        } catch (error) {
-            setLogs(prev => [...prev, {
-                time: new Date().toLocaleTimeString(),
-                type: 'error',
-                message: `❌ Search Error: ${error.message}`
-            }]);
+        } catch (e) {
+            console.error("Search failed:", e);
+            setLogs(prev => [...prev.slice(-10), "Error: Scan failed."]);
         } finally {
             setIsSearching(false);
         }
     };
 
+    const checkMismatch = (detected, target) => {
+        if (!detected || !target) return false;
+        return !detected.toLowerCase().includes(target.toLowerCase());
+    };
+
     const handleProcessAll = async () => {
-        if (candidates.length === 0) return;
+        if (candidates.length === 0 || isProcessing) return;
         setIsProcessing(true);
         setMismatches([]);
-        let localMismatches = [];
+        
+        const currentCandidates = [...candidates];
+        let resolvedFolderId = existingFolderId;
 
-        setLogs(prev => [...prev, {
-            time: new Date().toLocaleTimeString(),
-            type: 'success',
-            message: `🚀 Launching Scout & Batch Sync for ${candidates.length} candidates...`
-        }]);
-
-        const newCandidates = [...candidates];
-        const batchSize = 10;
-        let resolvedFolderId = existingFolderId || '';
-
-        // [RULE 1] Scout first if it's a new folder
+        // Auto-create folder if needed
         if (destType === 'new' && newFolderName) {
-            setLogs(prev => [...prev, {
-                time: new Date().toLocaleTimeString(),
-                type: 'info',
-                message: `🔍 [Scout] Ensuring folder exists: ${newFolderName}...`
-            }]);
-
             try {
-                const scoutRes = await fetch('/api/drive/ensure-folder', {
+                const scout = await fetch('/api/drive/ensure-folder', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ folderName: newFolderName })
                 });
-                const scoutData = await scoutRes.json();
-                if (scoutData.folderId) {
-                    resolvedFolderId = scoutData.folderId;
-                    setLogs(prev => [...prev, {
-                        time: new Date().toLocaleTimeString(),
-                        type: 'success',
-                        message: `🛡️ [Scout] Folder Confirmed! Starting Top-to-Bottom Batching...`
-                    }]);
-                }
+                const sData = await scout.json();
+                if (sData.folderId) resolvedFolderId = sData.folderId;
             } catch (e) {
-                console.error("Scout Failed:", e);
-                setLogs(prev => [...prev, {
-                    time: new Date().toLocaleTimeString(),
-                    type: 'error',
-                    message: `⚠️ Scout failed. Processing with best effort...`
-                }]);
+                console.error("Scout error:", e);
             }
         }
 
-        // [RULE 2] Strict Top-to-Bottom Batching
-        for (let i = 0; i < newCandidates.length; i += batchSize) {
-            const currentBatch = newCandidates.slice(i, i + batchSize);
-
-            setLogs(prev => [...prev, {
-                time: new Date().toLocaleTimeString(),
-                type: 'info',
-                message: `⚡ Batch [${Math.floor(i / batchSize) + 1}/${Math.ceil(newCandidates.length / batchSize)}] (${currentBatch.length} resumes)...`
-            }]);
-
-            const batchPromises = currentBatch.map(async (cand, index) => {
-                const globalIndex = i + index;
-                // Minor staggering for network smoothness
-                await new Promise(r => setTimeout(r, index * 150));
-
+        const batchSize = 10;
+        for (let i = 0; i < currentCandidates.length; i += batchSize) {
+            const batch = currentCandidates.slice(i, i + batchSize);
+            setLogs(prev => [...prev.slice(-10), `Processing batch ${Math.floor(i/batchSize) + 1}...`]);
+            const promises = batch.map(async (cand, idx) => {
+                const globalIdx = i + idx;
+                
+                // [FIX] Staggered start to prevent API rate limit spikes (800ms per candidate in batch)
+                await new Promise(resolve => setTimeout(resolve, idx * 800));
+                
+                setLogs(prev => [...prev.slice(-10), `Processing: ${cand.from.split('<')[0].trim() || 'Candidate'}`]);
                 try {
                     const res = await fetch('/api/gmail/process-single', {
                         method: 'POST',
@@ -182,562 +125,290 @@ export default function GmailSyncPage() {
                         body: JSON.stringify({
                             messageId: cand.id,
                             emailDate: cand.date,
-                            targetFolderName: resolvedFolderId ? '' : newFolderName, // Only send name if ID failed
                             targetFolderId: resolvedFolderId,
-                            keyOffset: globalIndex
+                            targetFolderName: resolvedFolderId ? '' : newFolderName
                         })
                     });
                     const result = await res.json();
-
-                    if (result.success && result.details) {
-                        const primaryRes = result.details[0]?.candidate;
-                        const sessionRole = destType === 'new' ? newFolderName : (existingFolders.find(f => f.id === existingFolderId)?.name || 'General');
-
-                        if (primaryRes && checkMismatch(primaryRes.Role, sessionRole)) {
-                            const foundRoleClean = primaryRes.Role ? primaryRes.Role.split('(')[0].trim() : 'Unknown';
-                            const existingMatch = existingFolders.find(f =>
-                                f.name.toLowerCase().includes(foundRoleClean.toLowerCase()) ||
-                                foundRoleClean.toLowerCase().includes(f.name.toLowerCase())
-                            );
-
-                            const mismatchObj = {
+                    if (result.success) {
+                        const info = result.details?.[0]?.candidate || {};
+                        setLogs(prev => [...prev.slice(-10), `Analyzed: ${info.Name || 'Unknown'}`]);
+                        const targetLabel = destType === 'new' ? newFolderName : (existingFolders.find(f => f.id === existingFolderId)?.name || 'Target');
+                        
+                        if (info.Role && checkMismatch(info.Role, targetLabel)) {
+                            const mismatch = {
                                 id: Math.random().toString(36).substr(2, 9),
-                                candidate: primaryRes.Name,
-                                foundRole: primaryRes.Role || 'Unknown',
-                                suggestedFolder: foundRoleClean,
-                                folderLink: result.details[0]?.folder || result.folder,
-                                targetType: existingMatch ? 'existing' : 'new',
-                                targetValue: existingMatch ? existingMatch.name : foundRoleClean,
+                                candidate: info.Name || 'Unknown',
+                                foundRole: info.Role,
+                                folderLink: result.details?.[0]?.folder || result.folder,
+                                targetType: 'new',
+                                targetValue: info.Role.split('(')[0].trim(),
                                 status: 'queued'
                             };
-
-                            localMismatches.push(mismatchObj);
-                            setMismatches(prev => [...prev, mismatchObj]);
-
-                            setLogs(prev => [...prev, {
-                                time: new Date().toLocaleTimeString(),
-                                type: 'warning',
-                                message: `👁️ Mismatch: ${primaryRes.Name} is a ${primaryRes.Role}.`
-                            }]);
+                            setMismatches(prev => [...prev, mismatch]);
                         }
-                    }
 
-                    if (result.success) {
-                        const primaryCandidate = result.details[0]?.candidate || {};
-                        setLogs(prev => [...prev, {
-                            time: new Date().toLocaleTimeString(),
-                            type: 'success',
-                            message: `✅ Saved: ${primaryCandidate.Name || 'Candidate'}.`
-                        }]);
-                        newCandidates[globalIndex].processed = true;
-                        newCandidates[globalIndex].fullData = primaryCandidate;
-                        newCandidates[globalIndex].folder = result.details[0]?.folder || result.folder;
-                        setCandidates([...newCandidates]);
+                        currentCandidates[globalIdx].processed = true;
+                        currentCandidates[globalIdx].fullData = info;
+                        currentCandidates[globalIdx].folder = result.details?.[0]?.folder || result.folder;
+                        setCandidates([...currentCandidates]);
                     }
-                } catch (error) {
-                    console.error("Single Process Error:", error);
+                } catch (e) {
+                    console.error("Process error:", e);
                 }
             });
-
-            await Promise.all(batchPromises);
+            await Promise.all(promises);
         }
-
-        setLogs(prev => [...prev, {
-            time: new Date().toLocaleTimeString(),
-            type: 'success',
-            message: `🏁 Sync Finished! Processed ${newCandidates.length} candidates top-to-bottom.`
-        }]);
-
         setIsProcessing(false);
-
-        if (localMismatches.length > 0) {
-            setLogs(prev => [...prev, {
-                time: new Date().toLocaleTimeString(),
-                type: 'info',
-                message: `📢 Opening Elite Traffic Controller for ${localMismatches.length} mismatches...`
-            }]);
-            await loadFolders();
-            setShowReview(true);
-        }
+        if (mismatches.length > 0) setShowReview(true);
     };
 
     const handleBulkMove = async () => {
         setIsProcessing(true);
         const list = [...mismatches];
-
-        // [TURBO] Parallelize all move requests simultaneously
-        const movePromises = list.map(async (m, i) => {
+        const moves = list.map(async (m, i) => {
             if (m.status === 'done') return;
-
-            // Update status to 'moving' instantly for each item
             list[i].status = 'moving';
             setMismatches([...list]);
-
             try {
                 const res = await fetch('/api/drive/move', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        folderLink: m.folderLink,
-                        targetFolderName: m.targetValue
-                    })
+                    body: JSON.stringify({ folderLink: m.folderLink, targetFolderName: m.targetValue })
                 });
                 const data = await res.json();
-
-                if (data.success) {
-                    list[i].status = 'done';
-                } else {
-                    list[i].status = 'error';
-                }
-            } catch (e) {
+                list[i].status = data.success ? 'done' : 'error';
+            } catch {
                 list[i].status = 'error';
-                console.error("[TURBO MOVE ERROR]:", e);
             }
-            // Update UI state for each completed move
             setMismatches([...list]);
         });
-
-        await Promise.all(movePromises);
+        await Promise.all(moves);
         setIsProcessing(false);
-
-        // Auto-close modal if everything finished successfully
-        if (list.every(m => m.status === 'done')) {
-            setTimeout(() => setShowReview(false), 2000);
-        }
+        if (list.every(x => x.status === 'done')) setTimeout(() => setShowReview(false), 2000);
     };
 
-    if (status === 'loading') return <div style={{ padding: '50px', textAlign: 'center' }}>Loading Session...</div>;
+    const processedCount = candidates.filter(c => c.processed).length;
+    const progressPercent = candidates.length > 0 ? Math.round((processedCount / candidates.length) * 100) : 0;
 
     return (
-        <div style={{
-            background: '#f8fafc',
-            minHeight: '100vh',
-            fontFamily: '"Inter", sans-serif',
-            color: '#1e293b',
-            display: 'flex',
-            flexDirection: 'column'
-        }}>
+        <div style={{ background: '#ffffff', height: '100vh', fontFamily: '"Outfit", "Inter", sans-serif', color: '#1e293b', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-                .btn { transition: all 0.2s; cursor: pointer; border: none; font-weight: 700; }
-                .btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); }
-                .btn:active:not(:disabled) { transform: translateY(0); }
-                .card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
-                .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-                @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+                @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+                .btn { transition: all 0.2s; cursor: pointer; border: none; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: inherit; }
+                .btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.05); }
+                .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+                .card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+                .sidebar-panel { width: 320px; border-right: 1px solid #e2e8f0; background: #f8fafc; padding: 20px 14px; display: flex; flex-direction: column; gap: 16px; height: calc(100vh - 72px); overflow: auto; overflow-x: hidden; }
+                .input-field { width: 100%; background: white; border: 1px solid #cbd5e1; color: #1e293b; padding: 8px 12px; border-radius: 8px; outline: none; transition: all 0.2s; font-size: 14px; font-family: inherit; box-sizing: border-box; }
+                .input-field:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); }
+                .selection-tile { padding: 12px; border: 2px solid #e2e8f0; border-radius: 12px; cursor: pointer; background: white; transition: all 0.2s; width: 100%; box-sizing: border-box; }
+                .selection-tile.active { border-color: #6366f1; background: #f5f7ff; }
+                .badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; border: 1px solid transparent; text-decoration: none; display: inline-block; }
+                .animate-pulse { animation: pulse 2s infinite; }
+                @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
             `}</style>
 
-            {/* HEADER */}
-            <div style={{
-                background: '#0f172a',
-                padding: '24px 40px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                color: 'white',
-                borderBottom: '4px solid #6366f1'
-            }}>
-                <div>
-                    <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '800', letterSpacing: '-0.5px' }}>📥 Batch Gmail Sync</h1>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#94a3b8' }}>Ingest candidates directly from your inbox without the extension.</p>
+            {/* TOP NAVIGATION */}
+            <div style={{ height: '72px', borderBottom: '1px solid #e2e8f0', padding: '0 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', zIndex: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '36px', height: '36px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '800' }}>G</div>
+                    <div>
+                        <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>Batch Gmail Sync</h1>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>Clean Ingestion Engine</div>
+                    </div>
                 </div>
-                <button
-                    onClick={() => router.push('/')}
-                    style={{
-                        background: 'rgba(255,255,255,0.1)',
-                        color: 'white',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                        padding: '10px 20px',
-                        borderRadius: '10px',
-                        cursor: 'pointer',
-                        fontWeight: '700',
-                        fontSize: '13px'
-                    }}
-                >
-                    Back to Dashboard
-                </button>
+                <button onClick={() => router.push('/')} className="btn" style={{ background: '#f1f5f9', color: '#475569', padding: '8px 18px', borderRadius: '10px', fontSize: '13px' }}>Back to Dashboard</button>
             </div>
 
-            {/* Elite Traffic Controller Modal */}
-            {showReview && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    background: 'rgba(15, 23, 42, 0.8)',
-                    backdropFilter: 'blur(8px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 1000,
-                    padding: '20px'
-                }}>
-                    <div style={{
-                        background: 'white',
-                        width: '100%',
-                        maxWidth: '900px',
-                        borderRadius: '24px',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        overflow: 'hidden',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        maxHeight: '85vh'
-                    }}>
-                        <div style={{
-                            padding: '24px 32px',
-                            background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-                            color: 'white',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                        }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>🚦 Elite Traffic Controller</h2>
-                                <p style={{ margin: '4px 0 0', opacity: 0.9, fontSize: '0.9rem' }}>
-                                    Found {mismatches.length} candidates that don't match your search. Redirect them now.
-                                </p>
-                            </div>
-                            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                <button
-                                    onClick={() => loadFolders()}
-                                    disabled={isLoadingFolders}
-                                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}
-                                >
-                                    {isLoadingFolders ? '🔄' : 'Refresh Folders'}
-                                </button>
-                                <button
-                                    onClick={() => setShowReview(false)}
-                                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '12px', cursor: 'pointer', fontWeight: 600 }}
-                                >
-                                    Decide Later
-                                </button>
+            <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+                {/* LEFT SIDEBAR */}
+                <div className="sidebar-panel">
+                    <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <label style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', margin: 0 }}>Folder Setting</label>
+                            <div style={{ display: 'flex', background: '#f1f5f9', padding: '2px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                <button onClick={() => setDestType('new')} style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', fontSize: '10px', fontWeight: '800', cursor: 'pointer', background: destType === 'new' ? 'white' : 'transparent', color: destType === 'new' ? '#6366f1' : '#64748b', boxShadow: destType === 'new' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none', transition: 'all 0.2s' }}>NEW</button>
+                                <button onClick={() => setDestType('existing')} style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', fontSize: '10px', fontWeight: '800', cursor: 'pointer', background: destType === 'existing' ? 'white' : 'transparent', color: destType === 'existing' ? '#6366f1' : '#64748b', boxShadow: destType === 'existing' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none', transition: 'all 0.2s' }}>EXISTING</button>
                             </div>
                         </div>
+                        <div style={{ background: 'white', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+                            {destType === 'new' ? (
+                                <input type="text" placeholder="Folder Name..." value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} className="input-field" />
+                            ) : (
+                                <select value={existingFolderId} onChange={(e) => setExistingFolderId(e.target.value)} disabled={isLoadingFolders} className="input-field">
+                                    <option value="">-- Select Existing Folder --</option>
+                                    {existingFolders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                                </select>
+                            )}
+                        </div>
+                    </div>
 
-                        <div style={{ padding: '0', overflowY: 'auto', flex: 1 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div>
+                            <label style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px', display: 'block' }}>Subject Line</label>
+                            <input type="text" placeholder="e.g. Java Screening" value={subject} onChange={(e) => setSubject(e.target.value)} className="input-field" />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                            <div>
+                                <label style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px', display: 'block' }}>From</label>
+                                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="input-field" />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px', display: 'block' }}>To</label>
+                                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="input-field" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onClick={handleSearch} disabled={isSearching || isProcessing} className="btn" style={{ width: '100%', padding: '12px', background: '#6366f1', color: 'white', borderRadius: '12px', fontSize: '14px' }}>
+                        {isSearching ? 'Scanning...' : 'Scan Inbox 🔎'}
+                    </button>
+
+                    {(isProcessing || progressPercent > 0) && (
+                        <div style={{ marginTop: 'auto', padding: '16px 4px 8px', borderTop: '1px solid #e2e8f0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
+                                <div>
+                                    <div style={{ fontSize: '10px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>AI Analysis in Progress</div>
+                                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#1e293b' }}>Processing: {processedCount} of {candidates.length} candidates</div>
+                                </div>
+                                <div style={{ fontSize: '18px', fontWeight: '900', color: '#6366f1', lineHeight: '1' }}>{progressPercent}%</div>
+                            </div>
+                            <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '30px', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', background: 'linear-gradient(90deg, #6366f1, #a855f7)', width: `${progressPercent}%`, transition: 'width 0.5s ease-out' }}></div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MINI TERMINAL */}
+                    <div style={{ marginTop: 'auto', background: '#0f172a', borderRadius: '12px', padding: '12px', height: '140px', overflowY: 'auto', border: '1px solid #1e293b', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.3)' }}>
+                        <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: '800', marginBottom: '8px', borderBottom: '1px solid #1e293b', paddingBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Live Analysis</span>
+                            <span style={{ color: '#10b981' }}>● ONLINE</span>
+                        </div>
+                        {logs.length === 0 ? (
+                            <div style={{ color: '#475569', fontSize: '11px', fontStyle: 'italic' }}>Waiting for sync triggers...</div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                {logs.map((log, i) => (
+                                    <div key={i} style={{ color: '#cbd5e1', fontSize: '10px', fontFamily: '"Fira Code", monospace', lineHeight: '1.4' }}>
+                                        <span style={{ color: '#6366f1' }}>$</span> {log}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* MAIN AREA */}
+                <div style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+                        <div>
+                            <h2 style={{ fontSize: '24px', fontWeight: '800', margin: 0 }}>Sync Targets</h2>
+                            <p style={{ fontSize: '14px', color: '#64748b', margin: '4px 0 0' }}>{candidates.length} potential candidates detected.</p>
+                        </div>
+                        <button onClick={handleProcessAll} disabled={candidates.length === 0 || isProcessing || isSearching} className="btn" style={{ padding: '12px 28px', background: '#10b981', color: 'white', borderRadius: '12px', fontSize: '14px', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)' }}>
+                            {isProcessing ? 'Processing Batch...' : 'Begin Batch Ingestion 🚀'}
+                        </button>
+                    </div>
+
+                    {candidates.length === 0 && !isSearching ? (
+                        <div style={{ height: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', borderRadius: '24px', border: '2px dashed #e2e8f0', color: '#64748b' }}>
+                            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📬</div>
+                            <div style={{ fontSize: '17px', fontWeight: '700' }}>Inbox is clean.</div>
+                            <p style={{ fontSize: '14px', marginTop: '8px' }}>Use the side panel to scan your Gmail.</p>
+                        </div>
+                    ) : (
+                        <div className="card" style={{ overflow: 'hidden' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 10 }}>
+                                <thead>
+                                    <tr style={{ background: '#f8fafc' }}>
+                                        <th style={{ padding: '16px 24px', fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>Candidate / Role</th>
+                                        <th style={{ padding: '16px 24px', fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>Contact</th>
+                                        <th style={{ padding: '16px 24px', fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>Links</th>
+                                        <th style={{ padding: '16px 24px', fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0', textAlign: 'center' }}>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {candidates.map((c) => {
+                                        const d = c.fullData || {};
+                                        return (
+                                            <tr key={c.id} style={{ background: c.processed ? '#f0fdf4' : 'transparent', borderBottom: '1px solid #f1f5f9' }}>
+                                                <td style={{ padding: '20px 24px' }}>
+                                                    <div style={{ fontWeight: '700', color: '#1e293b' }}>{d.Name || 'Detecting...'}</div>
+                                                    <div style={{ fontSize: '12px', color: '#64748b' }}>{d.Role || c.subject}</div>
+                                                </td>
+                                                <td style={{ padding: '20px 24px' }}>
+                                                    <div style={{ fontSize: '13px', fontWeight: '600' }}>{d.Email || c.from}</div>
+                                                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{d.Phone || 'Pending...'}</div>
+                                                </td>
+                                                <td style={{ padding: '20px 24px' }}>
+                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                        {c.processed ? (
+                                                            <>
+                                                                <a href={c.folder} target="_blank" className="badge" style={{ color: '#10b981', background: '#ecfdf5' }}>DRIVE</a>
+                                                                {d.LinkedIn && <a href={d.LinkedIn} target="_blank" className="badge" style={{ color: '#6366f1', background: '#f5f7ff' }}>LINKEDIN</a>}
+                                                            </>
+                                                        ) : <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Pending sync...</span>}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '20px 24px', textAlign: 'center' }}>
+                                                    {c.processed ? <span className="badge" style={{ color: '#10b981', background: '#dcfce7' }}>SYNCED ✅</span> : <span className="badge" style={{ color: '#94a3b8', background: '#f8fafc' }}>READY</span>}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* REDIRECT CONTROLLER MODAL */}
+            {showReview && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
+                    <div className="card" style={{ width: '100%', maxWidth: '900px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ padding: '24px 32px', background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '12px 12px 0 0' }}>
+                            <div>
+                                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '800' }}>🚦 Elite Traffic Controller</h2>
+                                <p style={{ margin: '4px 0 0', opacity: 0.9, fontSize: '13px' }}>{mismatches.length} role-mismatches found.</p>
+                            </div>
+                            <button onClick={() => setShowReview(false)} className="btn" style={{ background: 'rgba(255,255,255,0.2)', color: 'white', padding: '8px 16px', borderRadius: '10px' }}>Close</button>
+                        </div>
+                        <div style={{ flex: 1, overflowY: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
                                     <tr>
-                                        <th style={{ padding: '16px 32px', borderBottom: '1px solid #e2e8f0', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Candidate / Found Role</th>
-                                        <th style={{ padding: '16px 32px', borderBottom: '1px solid #e2e8f0', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Redirect Destination</th>
-                                        <th style={{ padding: '16px 32px', borderBottom: '1px solid #e2e8f0', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', textAlign: 'center' }}>Status</th>
+                                        <th style={{ padding: '16px 32px', textAlign: 'left', fontSize: '11px', fontWeight: '800', color: '#64748b' }}>Candidate</th>
+                                        <th style={{ padding: '16px 32px', textAlign: 'left', fontSize: '11px', fontWeight: '800', color: '#64748b' }}>Route To</th>
+                                        <th style={{ padding: '16px 32px', textAlign: 'center', fontSize: '11px', fontWeight: '800', color: '#64748b' }}>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {mismatches.map((m, idx) => (
-                                        <tr key={m.id} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? 'white' : '#f8fafc' }}>
+                                        <tr key={m.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                             <td style={{ padding: '20px 32px' }}>
-                                                <div style={{ fontWeight: 700, color: '#1e293b' }}>{m.candidate}</div>
-                                                <div style={{ fontSize: '0.85rem', color: '#6366f1', fontWeight: 600 }}>🔍 AI Says: {m.foundRole}</div>
+                                                <div style={{ fontWeight: '700' }}>{m.candidate}</div>
+                                                <div style={{ fontSize: '12px', color: '#6366f1' }}>{m.foundRole}</div>
                                             </td>
                                             <td style={{ padding: '20px 32px' }}>
-                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                    <select
-                                                        value={m.targetType}
-                                                        onChange={(e) => {
-                                                            const newList = [...mismatches];
-                                                            newList[idx].targetType = e.target.value;
-                                                            if (e.target.value === 'existing' && !existingFolders.some(f => f.name === m.targetValue)) {
-                                                                newList[idx].targetValue = existingFolders[0]?.name || 'General';
-                                                            }
-                                                            setMismatches(newList);
-                                                        }}
-                                                        style={{ padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.85rem', outline: 'none' }}
-                                                    >
-                                                        <option value="existing">Existing Folder</option>
-                                                        <option value="new">Create New</option>
-                                                    </select>
-
-                                                    {m.targetType === 'existing' ? (
-                                                        <select
-                                                            value={m.targetValue}
-                                                            onChange={(e) => {
-                                                                const newList = [...mismatches];
-                                                                newList[idx].targetValue = e.target.value;
-                                                                setMismatches(newList);
-                                                            }}
-                                                            style={{ padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.85rem', outline: 'none', flex: 1, fontWeight: 600 }}
-                                                        >
-                                                            {existingFolders.map(f => (
-                                                                <option key={f.id} value={f.name}>{f.name}</option>
-                                                            ))}
-                                                        </select>
-                                                    ) : (
-                                                        <input
-                                                            type="text"
-                                                            value={m.targetValue}
-                                                            onChange={(e) => {
-                                                                const newList = [...mismatches];
-                                                                newList[idx].targetValue = e.target.value;
-                                                                setMismatches(newList);
-                                                            }}
-                                                            placeholder="Folder Name..."
-                                                            style={{ padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.85rem', outline: 'none', flex: 1, fontWeight: 600 }}
-                                                        />
-                                                    )}
-                                                </div>
+                                                <input type="text" value={m.targetValue} onChange={(e) => { const n = [...mismatches]; n[idx].targetValue = e.target.value; setMismatches(n); }} className="input-field" />
                                             </td>
                                             <td style={{ padding: '20px 32px', textAlign: 'center' }}>
-                                                {m.status === 'queued' && <span style={{ padding: '4px 12px', background: '#f1f5f9', color: '#64748b', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 700 }}>QUEUED</span>}
-                                                {m.status === 'moving' && <span style={{ padding: '4px 12px', background: '#e0f2fe', color: '#0ea5e9', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 700 }} className="animate-pulse">MOVING...</span>}
-                                                {m.status === 'done' && <span style={{ padding: '4px 12px', background: '#dcfce7', color: '#16a34a', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 700 }}>DONE ✅</span>}
-                                                {m.status === 'error' && <span style={{ padding: '4px 12px', background: '#fee2e2', color: '#dc2626', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 700 }}>FAILED</span>}
+                                                <span className="badge" style={{ color: m.status === 'done' ? '#10b981' : '#6366f1' }}>{m.status.toUpperCase()}</span>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
-
-                        <div style={{ padding: '24px 32px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
-                            <button
-                                onClick={handleBulkMove}
-                                disabled={isProcessing || mismatches.every(m => m.status === 'done')}
-                                style={{
-                                    padding: '12px 32px',
-                                    background: '#1e293b',
-                                    color: 'white',
-                                    borderRadius: '12px',
-                                    fontWeight: 700,
-                                    border: 'none',
-                                    cursor: (isProcessing || mismatches.every(m => m.status === 'done')) ? 'not-allowed' : 'pointer',
-                                    opacity: (isProcessing || mismatches.every(m => m.status === 'done')) ? 0.6 : 1,
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
-                                }}
-                            >
-                                {isProcessing ? 'Processing...' : 'Apply All Redirects 🚀'}
-                            </button>
+                        <div style={{ padding: '24px 32px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', background: '#f8fafc' }}>
+                            <button onClick={handleBulkMove} disabled={isProcessing} className="btn" style={{ padding: '12px 32px', background: '#1e293b', color: 'white', borderRadius: '10px' }}>Apply Redirects 🚀</button>
                         </div>
                     </div>
                 </div>
             )}
-
-            <div style={{ flex: 1, padding: '32px 40px', display: 'grid', gridTemplateColumns: 'minmax(400px, 1fr) 450px', gap: '32px', height: 'calc(100vh - 84px)', overflow: 'hidden' }}>
-
-                {/* LEFT: COMMAND CENTER & RESULTS */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', overflow: 'hidden' }}>
-
-                    {/* DESTINATION SETTINGS */}
-                    <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-                        <label style={{ fontSize: '11px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', marginBottom: '16px', display: 'block' }}>📍 Destination Settings (Shared Drive)</label>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                            <div
-                                onClick={() => setDestType('new')}
-                                style={{
-                                    padding: '16px',
-                                    border: `2px solid ${destType === 'new' ? '#6366f1' : '#e2e8f0'}`,
-                                    borderRadius: '12px',
-                                    cursor: 'pointer',
-                                    background: destType === 'new' ? '#f5f7ff' : 'white'
-                                }}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                                    <input type="radio" checked={destType === 'new'} readOnly style={{ marginRight: '10px' }} />
-                                    <span style={{ fontWeight: '700', fontSize: '14px' }}>Create New Folder</span>
-                                </div>
-                                <input
-                                    type="text"
-                                    placeholder="Enter folder name (e.g. Java)"
-                                    value={newFolderName}
-                                    onChange={(e) => setNewFolderName(e.target.value)}
-                                    disabled={destType !== 'new'}
-                                    style={{
-                                        width: '100%',
-                                        padding: '8px',
-                                        border: '1px solid #cbd5e1',
-                                        borderRadius: '6px',
-                                        fontSize: '13px'
-                                    }}
-                                />
-                            </div>
-
-                            <div
-                                onClick={() => setDestType('existing')}
-                                style={{
-                                    padding: '16px',
-                                    border: `2px solid ${destType === 'existing' ? '#6366f1' : '#e2e8f0'}`,
-                                    borderRadius: '12px',
-                                    cursor: 'pointer',
-                                    background: destType === 'existing' ? '#f5f7ff' : 'white'
-                                }}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                                    <input type="radio" checked={destType === 'existing'} readOnly style={{ marginRight: '10px' }} />
-                                    <span style={{ fontWeight: '700', fontSize: '14px' }}>Move to Existing Folder</span>
-                                </div>
-                                <select
-                                    value={existingFolderId}
-                                    onChange={(e) => setExistingFolderId(e.target.value)}
-                                    disabled={destType !== 'existing' || isLoadingFolders}
-                                    style={{
-                                        width: '100%',
-                                        padding: '8px',
-                                        border: '1px solid #cbd5e1',
-                                        borderRadius: '6px',
-                                        fontSize: '13px'
-                                    }}
-                                >
-                                    <option value="">{isLoadingFolders ? 'Loading...' : '-- Select Folder --'}</option>
-                                    {existingFolders.map(f => (
-                                        <option key={f.id} value={f.id}>{f.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* SEARCH CONTROLS */}
-                    <div className="card" style={{ padding: '24px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1.5fr) 1fr 1fr auto', gap: '16px', alignItems: 'flex-end' }}>
-                            <div>
-                                <label style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px', display: 'block' }}>Subject Line to Search</label>
-                                <input
-                                    type="text"
-                                    placeholder="e.g. Gmail Data should fetch"
-                                    value={subject}
-                                    onChange={(e) => setSubject(e.target.value)}
-                                    style={{ width: '100%', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '14px' }}
-                                />
-                            </div>
-                            <div>
-                                <label style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px', display: 'block' }}>Start Date</label>
-                                <input
-                                    type="date"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    style={{ width: '100%', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '14px' }}
-                                />
-                            </div>
-                            <div>
-                                <label style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px', display: 'block' }}>End Date</label>
-                                <input
-                                    type="date"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    style={{ width: '100%', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '14px' }}
-                                />
-                            </div>
-                            <button
-                                className="btn"
-                                onClick={handleSearch}
-                                disabled={isSearching || isProcessing}
-                                style={{
-                                    background: '#6366f1',
-                                    color: 'white',
-                                    padding: '12px 30px',
-                                    borderRadius: '10px',
-                                    fontSize: '14px',
-                                    opacity: (isSearching || isProcessing) ? 0.7 : 1
-                                }}
-                            >
-                                {isSearching ? 'Scanning...' : 'Scan Inbox'}
-                            </button>
-                        </div>
-                        <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748b', fontStyle: 'italic' }}>
-                            *Strictly scanning for emails with <strong>attachments</strong> matching your Subject line above.
-                        </div>
-                    </div>
-
-                    {/* CANDIDATE LIST */}
-                    <div className="card" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                                <span style={{ fontWeight: '800', color: '#1e293b' }}>Sync Targets</span>
-                                <span style={{ marginLeft: '10px', fontSize: '12px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '12px' }}>
-                                    {candidates.length} Detected
-                                </span>
-                            </div>
-                            <button
-                                className="btn"
-                                onClick={handleProcessAll}
-                                disabled={candidates.length === 0 || isProcessing || isSearching}
-                                style={{
-                                    background: '#10b981',
-                                    color: 'white',
-                                    padding: '8px 20px',
-                                    borderRadius: '8px',
-                                    fontSize: '13px',
-                                    boxShadow: '0 4px 10px rgba(16, 185, 129, 0.2)',
-                                    opacity: (candidates.length === 0 || isProcessing) ? 0.5 : 1
-                                }}
-                            >
-                                {isProcessing ? 'Processing Batch...' : 'Begin Batch Ingestion'}
-                            </button>
-                        </div>
-
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
-                            {candidates.length === 0 ? (
-                                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
-                                    <div style={{ fontSize: '40px', marginBottom: '12px' }}>💡</div>
-                                    <p style={{ fontWeight: '600' }}>Waiting for scan results.</p>
-                                    <p style={{ fontSize: '13px' }}>Emails must include: <strong>"Gmail Data should fetch"</strong></p>
-                                </div>
-                            ) : (
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                                    <thead>
-                                        <tr style={{ borderBottom: '2px solid #e2e8f0', background: '#f8fafc' }}>
-                                            <th style={{ textAlign: 'left', padding: '8px', color: '#64748b', textTransform: 'uppercase' }}>Candidate / Role</th>
-                                            <th style={{ textAlign: 'left', padding: '8px', color: '#64748b', textTransform: 'uppercase', width: '40px' }}>Exp</th>
-                                            <th style={{ textAlign: 'left', padding: '8px', color: '#64748b', textTransform: 'uppercase' }}>Contact</th>
-                                            <th style={{ textAlign: 'left', padding: '8px', color: '#64748b', textTransform: 'uppercase' }}>Links</th>
-                                            <th style={{ textAlign: 'center', padding: '8px', color: '#64748b', textTransform: 'uppercase', width: '60px' }}>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {candidates.map((cand, idx) => {
-                                            const data = cand.fullData || {};
-                                            return (
-                                                <tr key={cand.id} style={{ borderBottom: '1px solid #f1f5f9', background: cand.processed ? '#f0fdf4' : 'transparent' }}>
-                                                    <td style={{ padding: '8px' }}>
-                                                        <div style={{ fontWeight: '800', color: '#334155' }}>{data.Name || 'Awaiting Sync...'}</div>
-                                                        <div style={{ fontSize: '10px', color: '#64748b' }}>{data.Role || cand.subject}</div>
-                                                    </td>
-                                                    <td style={{ padding: '8px', fontWeight: '700' }}>{data['Years of Experience'] || '—'}</td>
-                                                    <td style={{ padding: '8px' }}>
-                                                        <div style={{ fontWeight: '600', color: '#6366f1' }}>{data.Email || cand.from.split('<')[1]?.slice(0, -1) || cand.from}</div>
-                                                        <div style={{ fontSize: '10px', color: '#64748b' }}>{data.Phone || 'N/A'}</div>
-                                                    </td>
-                                                    <td style={{ padding: '8px' }}>
-                                                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                                            {cand.processed ? (
-                                                                <>
-                                                                    <a href={cand.folder} target="_blank" style={{ color: '#6366f1', textDecoration: 'none', border: '1px solid #e0e7ff', padding: '1px 4px', borderRadius: '3px' }}>Drive</a>
-                                                                    {data.LinkedIn && <a href={data.LinkedIn} target="_blank" style={{ color: '#6366f1', textDecoration: 'none', border: '1px solid #e0e7ff', padding: '1px 4px', borderRadius: '3px' }}>LinkedIn</a>}
-                                                                    <a href={`https://mail.google.com/mail/u/0/#inbox/${cand.threadId}`} target="_blank" style={{ color: '#64748b', textDecoration: 'none', border: '1px solid #f1f5f9', padding: '1px 4px', borderRadius: '3px' }}>Thread</a>
-                                                                </>
-                                                            ) : '—'}
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '8px', textAlign: 'center' }}>
-                                                        {cand.processed ? (
-                                                            <span style={{ color: '#10b981', fontWeight: '900', fontSize: '9px', background: '#dcfce7', padding: '2px 4px', borderRadius: '3px' }}>DONE</span>
-                                                        ) : (
-                                                            <span style={{ color: '#6366f1', fontWeight: '700', fontSize: '9px', border: '1px solid #e0e7ff', padding: '2px 4px', borderRadius: '3px' }}>READY</span>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* RIGHT: LIVE TERMINAL */}
-                <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                    <div className="card" style={{ flex: 1, overflow: 'hidden', background: '#0f172a', border: '1px solid #334155' }}>
-                        <LiveProgressTracker
-                            isAnalyzing={isProcessing || isSearching}
-                            analysisLogs={logs}
-                            totalCandidates={candidates.length}
-                            processedCount={candidates.filter(c => c.processed).length}
-                        />
-                    </div>
-                </div>
-
-            </div>
         </div>
     );
 }

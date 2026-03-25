@@ -143,6 +143,7 @@ export async function POST(req) {
                             senderEmail: from,
                             threadLink: `https://mail.google.com/mail/u/0/#inbox/${thread.data.id}`,
                             threadId: thread.data.id,
+                            messageId: resume.processedFromMessageId || messageId, // [NEW] Pass messageId for precise fingerprinting
                             emailDate: emailDate, // Pass through
                             processedBy: session.user.email,
                             keyOffset: keyOffset + index
@@ -172,6 +173,7 @@ export async function POST(req) {
                     senderEmail: from,
                     threadLink: `https://mail.google.com/mail/u/0/#inbox/${thread.data.id}`,
                     threadId: thread.data.id,
+                    messageId: messageId, // [NEW] Pass messageId for precise fingerprinting
                     emailDate: emailDate, // Pass through
                     processedBy: session.user.email
                 })

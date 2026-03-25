@@ -104,7 +104,7 @@ async function getSynchronizedFolder(name, parentId) {
 export async function POST(req) {
     try {
         const body = await req.json();
-        const { accessCode, subject, emailBody, attachments, manualFolderName, manualFolderId, senderEmail, threadLink, threadId, processedBy, emailDate, keyOffset = 0 } = body;
+        const { accessCode, subject, emailBody, attachments, manualFolderName, manualFolderId, senderEmail, threadLink, threadId, messageId, processedBy, emailDate, keyOffset = 0 } = body;
 
         // Determine destination based on context (Batch Sync should use the new IDs)
         // If threadId is provided, we assume it's coming from Gmail Sync
@@ -204,15 +204,16 @@ export async function POST(req) {
                     const cleanExistingEmail = extractEmail(existingEmail);
 
                     if (
+                        (messageId && existingFingerprint === messageId) ||
                         (threadId && existingFingerprint === threadId) ||
                         (cleanSenderEmail && cleanExistingEmail && cleanExistingEmail === cleanSenderEmail)
                     ) {
-                        console.log(`[DEDUPLICATION] Skipping already processed candidate. Thread: ${threadId}, Email: ${cleanSenderEmail}`);
+                        console.log(`[DEDUPLICATION] Skipping already processed candidate. Message: ${messageId}, Thread: ${threadId}, Email: ${cleanSenderEmail}`);
                         return NextResponse.json({
                             success: true,
                             skipped: true,
                             reason: "Duplicate candidate already exists in the database.",
-                            details: "Matched on Email or Thread Fingerprint."
+                            details: "Matched on Email, Message, or Thread Fingerprint."
                         });
                     }
                 }
@@ -455,7 +456,7 @@ export async function POST(req) {
         mapData("Sender", senderEmail || 'N/A');
         mapData("Thread", threadLink ? `=HYPERLINK("${threadLink}", "Thread")` : 'N/A');
         mapData("Processed By", processedBy || 'N/A');
-        mapData("Fingerprint", threadId || 'N/A');
+        mapData("Fingerprint", messageId || threadId || 'N/A');
 
         mapData("Visa", candidateData.Visa || 'N/A');
         mapData("Location", candidateData.Location || 'N/A');
