@@ -1297,26 +1297,45 @@ Innovcentric LLC`;
                                             onClick={(e) => { e.stopPropagation(); handleBulkEmail(); }}
                                             disabled={isBulkSending || selectedIndices.size === 0}
                                             style={{
-                                                padding: '8px 18px',
-                                                borderRadius: '20px',
-                                                fontSize: '11px',
+                                                padding: '10px 24px',
+                                                borderRadius: '30px',
+                                                fontSize: '12px',
                                                 fontWeight: '800',
-                                                background: (isBulkSending || selectedIndices.size === 0) ? '#f8fafc' : 'white',
-                                                color: (isBulkSending || selectedIndices.size === 0) ? '#94a3b8' : '#6366f1',
-                                                border: `1.5px solid ${(isBulkSending || selectedIndices.size === 0) ? '#e2e8f0' : '#6366f1'}`,
+                                                background: (isBulkSending || selectedIndices.size === 0) 
+                                                    ? '#f1f5f9' 
+                                                    : 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+                                                color: (isBulkSending || selectedIndices.size === 0) ? '#94a3b8' : 'white',
+                                                border: 'none',
                                                 cursor: (isBulkSending || selectedIndices.size === 0) ? 'not-allowed' : 'pointer',
-                                                transition: 'all 0.2s',
+                                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                                                 textTransform: 'uppercase',
-                                                letterSpacing: '0.5px',
+                                                letterSpacing: '1px',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '8px',
-                                                boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                                                gap: '10px',
+                                                boxShadow: (isBulkSending || selectedIndices.size === 0) 
+                                                    ? 'none' 
+                                                    : '0 4px 14px rgba(79, 70, 229, 0.3)',
+                                                transform: 'translateZ(0)'
                                             }}
-                                            onMouseEnter={e => { if (!isBulkSending && selectedIndices.size > 0) { e.currentTarget.style.background = '#6366f1'; e.currentTarget.style.color = 'white'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
-                                            onMouseLeave={e => { if (!isBulkSending && selectedIndices.size > 0) { e.currentTarget.style.background = 'white'; e.currentTarget.style.color = '#6366f1'; e.currentTarget.style.transform = 'translateY(0)'; } }}
+                                            onMouseEnter={e => { 
+                                                if (!isBulkSending && selectedIndices.size > 0) { 
+                                                    e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)'; 
+                                                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(79, 70, 229, 0.4)';
+                                                } 
+                                            }}
+                                            onMouseLeave={e => { 
+                                                if (!isBulkSending && selectedIndices.size > 0) { 
+                                                    e.currentTarget.style.transform = 'translateY(0) scale(1)'; 
+                                                    e.currentTarget.style.boxShadow = '0 4px 14px rgba(79, 70, 229, 0.3)';
+                                                } 
+                                            }}
                                         >
-                                            {isBulkSending ? '⌛ Sending...' : <><span>📬</span> Send to {selectedIndices.size} Selected</>}
+                                            {isBulkSending ? (
+                                                <><span>⌛</span> SENDING...</>
+                                            ) : (
+                                                <><span>🚀</span> SEND TO {selectedIndices.size} SELECTED</>
+                                            )}
                                         </button>
                                     </div>
                                 </div>
@@ -1601,19 +1620,43 @@ Innovcentric LLC`;
                                                                         const validEmails = getValidEmails(c);
                                                                         if (sendingEmails[i] === 'sent') {
                                                                             return (
-                                                                                <span className="px-3 py-1 bg-green-50 text-green-600 rounded-full text-[10px] font-bold border border-green-100 flex items-center justify-center gap-1.5" style={{ whiteSpace: 'nowrap' }}>
-                                                                                    ✅ SENT
-                                                                                </span>
+                                                                                <div style={{
+                                                                                    padding: '4px 14px',
+                                                                                    background: '#ecfdf5',
+                                                                                    color: '#059669',
+                                                                                    borderRadius: '20px',
+                                                                                    fontSize: '9px',
+                                                                                    fontWeight: '900',
+                                                                                    border: '1px solid #10b981',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '4px',
+                                                                                    letterSpacing: '0.5px'
+                                                                                }}>
+                                                                                    <span>✅</span> SENT
+                                                                                </div>
                                                                             );
                                                                         }
                                                                         if (!validEmails) {
                                                                             return (
                                                                                 <button
                                                                                     onClick={(e) => { e.stopPropagation(); handleSendRichEmail(c, i); }}
-                                                                                    className="px-3 py-1 bg-red-600 text-white rounded-md text-[10px] font-bold hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
-                                                                                    style={{ border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                                                                    style={{
+                                                                                        padding: '4px 14px',
+                                                                                        background: '#fff1f2',
+                                                                                        color: '#e11d48',
+                                                                                        borderRadius: '20px',
+                                                                                        fontSize: '9px',
+                                                                                        fontWeight: '900',
+                                                                                        border: '1px solid #fda4af',
+                                                                                        cursor: 'pointer',
+                                                                                        display: 'flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '4px',
+                                                                                        letterSpacing: '0.5px'
+                                                                                    }}
                                                                                 >
-                                                                                    NO EMAIL
+                                                                                    <span>🚫</span> NO EMAIL
                                                                                 </button>
                                                                             );
                                                                         }
@@ -1621,10 +1664,41 @@ Innovcentric LLC`;
                                                                             <button
                                                                                 onClick={(e) => { e.stopPropagation(); handleSendRichEmail(c, i); }}
                                                                                 disabled={sendingEmails[i] === 'sending'}
-                                                                                className="px-4 py-1.5 bg-indigo-600 text-white rounded-md text-[10px] font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5 shadow-sm group"
-                                                                                style={{ border: 'none', cursor: 'pointer' }}
+                                                                                style={{
+                                                                                    padding: '6px 16px',
+                                                                                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                                                                                    color: 'white',
+                                                                                    borderRadius: '20px',
+                                                                                    fontSize: '10px',
+                                                                                    fontWeight: '800',
+                                                                                    border: 'none',
+                                                                                    cursor: sendingEmails[i] === 'sending' ? 'not-allowed' : 'pointer',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '6px',
+                                                                                    boxShadow: '0 2px 4px rgba(79, 70, 229, 0.2)',
+                                                                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                                    textTransform: 'uppercase',
+                                                                                    letterSpacing: '0.5px'
+                                                                                }}
+                                                                                onMouseEnter={e => {
+                                                                                    if (sendingEmails[i] !== 'sending') {
+                                                                                        e.currentTarget.style.transform = 'scale(1.05) translateY(-1px)';
+                                                                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(79, 70, 229, 0.3)';
+                                                                                    }
+                                                                                }}
+                                                                                onMouseLeave={e => {
+                                                                                    if (sendingEmails[i] !== 'sending') {
+                                                                                        e.currentTarget.style.transform = 'scale(1) translateY(0)';
+                                                                                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(79, 70, 229, 0.2)';
+                                                                                    }
+                                                                                }}
                                                                             >
-                                                                                {sendingEmails[i] === 'sending' ? '⌛ ...' : '✉️ Send'}
+                                                                                {sendingEmails[i] === 'sending' ? (
+                                                                                    <><span>⌛</span> SENDING...</>
+                                                                                ) : (
+                                                                                    <><span>📧</span> SEND</>
+                                                                                )}
                                                                             </button>
                                                                         );
                                                                     })()}
