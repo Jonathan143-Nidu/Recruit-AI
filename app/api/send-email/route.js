@@ -45,13 +45,22 @@ export async function POST(req) {
         
         .section-title { font-size: 10px; font-weight: 800; color: #6366f1; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; }
         
-        .gap-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 11px; }
-        .gap-table th { text-align: left; padding: 6px 10px; color: #64748b; font-weight: 700; border-bottom: 1px solid #f1f5f9; background: #f8fafc; font-size: 10px; }
-        .gap-table td { padding: 4px 10px; border-bottom: 1px solid #f8fafc; line-height: 1.4; color: #475569; }
+        /* NEW PREMIUM REDESIGN STYLES */
+        .category-header { font-size: 11px; font-weight: 800; margin-bottom: 6px; margin-top: 15px; }
+        .header-red { color: #e11d48; }
+        .header-amber { color: #f59e0b; }
         
-        .status-badge { padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; }
-        .status-missing { background: #fee2e2; color: #ef4444; }
-        .status-partial { background: #fef3c7; color: #f59e0b; }
+        .gap-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 11px; }
+        .gap-table th { text-align: left; padding: 6px 10px; color: #94a3b8; font-weight: 700; border-bottom: 1px solid #f1f5f9; background: #f8fafc; font-size: 9px; text-transform: uppercase; }
+        .gap-table td { padding: 6px 10px; border-bottom: 1px solid #f8fafc; line-height: 1.4; color: #1e293b; }
+        
+        .border-red { border-bottom: 1.5px solid #fee2e2 !important; }
+        .border-amber { border-bottom: 1.5px solid #fef3c7 !important; }
+        
+        .summary-box { margin-top: 15px; padding: 12px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
+        .summary-title { font-size: 11px; font-weight: 900; color: #0f172a; margin-bottom: 4px; }
+        .summary-match { font-size: 10px; color: #6366f1; font-weight: 700; }
+        .summary-gap { font-size: 10px; color: #ef4444; font-weight: 700; }
         
         .sidebar-item { margin-bottom: 12px; }
         .sidebar-label { font-size: 9px; font-weight: 800; color: #94a3b8; text-transform: uppercase; display: block; margin-bottom: 2px; }
@@ -112,32 +121,77 @@ export async function POST(req) {
                 <div class="intro" style="font-size:12px; line-height:1.5;">${customIntro || `Hello ${candidate?.displayName || 'Candidate'},<br/><br/>${senderName} here from Innovcentric. We've carefully reviewed your profile against our current opening. Based on our AI-driven "Forensic Analysis", here is your detailed match report.`}</div>
                 
                 <div class="section-title">Gap Analysis</div>
-                <table class="gap-table">
-                    <thead>
-                        <tr style="background:#f8fafc;">
-                            <th style="width: 35%;">Skill</th>
-                            <th style="width: 25%;">Requirement</th>
-                            <th style="width: 25%;">CV Status</th>
-                            <th style="width: 15%;">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${candidate?.gaps?.map(g => `
-                            <tr>
-                            <td style="border-bottom: 1px solid #f1f5f9; font-weight: 800; color: #1e293b;">${g.skill}</td>
-                            <td style="border-bottom: 1px solid #f1f5f9; font-weight: 700; color: #475569;">${g.req}</td>
-                            <td style="border-bottom: 1px solid #f1f5f9; color: ${g.status === 'Missing' ? '#ef4444' : '#f59e0b'}; font-weight: 900;">
-                                ${g.has || (g.status === 'Missing' ? 'Not Found' : '---')}
-                            </td>
-                                <td style="border-bottom: 1px solid #f1f5f9;">
-                                    <span class="status-badge ${g.status === 'Missing' ? 'status-missing' : 'status-partial'}">${g.status}</span>
-                                </td>
-                            </tr>
-                        `).join('') || '<tr><td colspan="4" style="text-align:center; color:#94a3b8; font-style:italic;">Detailed match report loading...</td></tr>'}
-                        ${candidate?.gaps?.length === 0 ? '<tr><td colspan="4" style="text-align:center; color:#94a3b8; font-style:italic;">No major gaps identified! Matches JD requirements well.</td></tr>' : ''}
-                    </tbody>
-                </table>
+
+                <!-- CATEGORIZED TABLES (PREMIUM AI INSIGHTS STYLE) -->
                 
+                ${(candidate?.missingSkills?.length > 0) ? `
+                    <div class="category-header header-red">Missing Skills:</div>
+                    <table class="gap-table">
+                        <thead>
+                            <tr>
+                                <th style="border-bottom: 1.5px solid #fee2e2;">Missing Skills</th>
+                                <th style="text-align: center; border-bottom: 1.5px solid #fee2e2;">JD Req</th>
+                                <th style="text-align: center; border-bottom: 1.5px solid #fee2e2;">Has</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${candidate.missingSkills.map(s => `
+                                <tr>
+                                    <td style="font-weight: 800; border-bottom: 1px solid #fee2e2;">• ${typeof s === 'string' ? s : s.skill}</td>
+                                    <td style="text-align: center; font-weight: 700; color: #64748b; border-bottom: 1px solid #fee2e2;">Must Have</td>
+                                    <td style="text-align: center; font-weight: 900; color: #ef4444; border-bottom: 1px solid #fee2e2;">0m</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : ''}
+
+                ${(candidate?.missingCertifications?.length > 0) ? `
+                    <div class="category-header header-red">Missing Certifications:</div>
+                    <table class="gap-table">
+                        <thead>
+                            <tr>
+                                <th style="border-bottom: 1.5px solid #fee2e2;">Missing Certifications</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${candidate.missingCertifications.map(c => `
+                                <tr>
+                                    <td style="font-weight: 800; border-bottom: 1px solid #fee2e2;">• ${typeof c === 'string' ? c : (c.name || c.skill)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : ''}
+
+                ${(candidate?.partialMatchSkills?.length > 0) ? `
+                    <div class="category-header header-amber">Partial Match Skills:</div>
+                    <table class="gap-table">
+                        <thead>
+                            <tr>
+                                <th style="border-bottom: 1.5px solid #fef3c7;">Partial</th>
+                                <th style="text-align: center; border-bottom: 1.5px solid #fef3c7;">JD Req</th>
+                                <th style="text-align: center; border-bottom: 1.5px solid #fef3c7;">Has</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${candidate.partialMatchSkills.map(p => `
+                                <tr>
+                                    <td style="font-weight: 800; border-bottom: 1px solid #fef3c7;">• ${p.skill}</td>
+                                    <td style="text-align: center; font-weight: 700; color: #475569; border-bottom: 1px solid #fef3c7;">${p.jdRequirement || p.req || '-'}</td>
+                                    <td style="text-align: center; font-weight: 900; color: #f59e0b; border-bottom: 1px solid #fef3c7;">${p.candidateHas || p.has || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : ''}
+
+                <!-- SUMMARY PERCENTAGES -->
+                <div class="summary-box">
+                    <div class="summary-title">Resume Percentage to JD:</div>
+                    <div class="summary-match">(match skills + Partial skills) ${candidate?.matchPercentage || 0}%</div>
+                    <div class="summary-gap">Missing skills ${100 - (candidate?.matchPercentage || 0)}%</div>
+                </div>
                 
                 <a href="${careersLink || 'https://innovcentric.com/careers'}" class="button">View More Jobs</a>
 
@@ -145,7 +199,6 @@ export async function POST(req) {
             </div>
             
             <div class="sidebar-essentials">
-
                 ${candidate?.requiredDetails ? `
                     <div style="margin-top:25px;">
                         <div class="section-title">Required Details</div>
@@ -160,6 +213,7 @@ export async function POST(req) {
 </body>
 </html>
         `;
+
 
         // Gmail requires messages to be in base64url encoded format
         const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
