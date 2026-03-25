@@ -10,8 +10,12 @@ export async function GET() {
         });
 
         const rows = response.data.values || [];
-        // Format: [Timestamp, JD, Count, ResultsJSON]
-        const history = rows.map((row, index) => {
+        
+        // Skip header if present
+        const dataRows = rows.length > 0 && rows[0][0] === 'Timestamp' ? rows.slice(1) : rows;
+
+        // Format: [Timestamp, JD, Count, ResultsJSON, ProcessedBy]
+        const history = dataRows.map((row, index) => {
             try {
                 return {
                     id: index, // Simple index as ID

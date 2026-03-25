@@ -121,7 +121,7 @@ async function saveAnalysisHistory(jd, results, processedBy) {
         // Append to 'Analysis_History' sheet
         await sheets.spreadsheets.values.append({
             spreadsheetId: SHEET_ID,
-            range: 'Analysis_History!A:D',
+            range: 'Analysis_History!A:E',
             valueInputOption: 'USER_ENTERED',
             requestBody: {
                 values: [
