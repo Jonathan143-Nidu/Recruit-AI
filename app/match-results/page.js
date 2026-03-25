@@ -366,6 +366,7 @@ export default function MatchResultsPage() {
                 }
             });
             cand.missingSkills?.forEach(s => gaps.push({ skill: typeof s === 'string' ? s : s.skill, req: typeof s === 'object' ? (s.jdRequirement || s.req || 'Required') : 'Required', has: 'Not Found', status: 'Missing' }));
+            cand.missingCertifications?.forEach(cert => gaps.push({ skill: typeof cert === 'object' ? (cert.name || cert.skill || 'Certification') : cert, req: 'Must Have', has: 'Not Found', status: 'Missing' }));
 
             return {
                 to: cand.Sender || cand.Email,
@@ -463,6 +464,7 @@ export default function MatchResultsPage() {
             }
         });
         candidate.missingSkills?.forEach(s => gaps.push({ skill: typeof s === 'string' ? s : s.skill, req: typeof s === 'object' ? (s.jdRequirement || s.req || 'Required') : 'Required', has: 'Not Found', status: 'Missing' }));
+        candidate.missingCertifications?.forEach(cert => gaps.push({ skill: typeof cert === 'object' ? (cert.name || cert.skill || 'Certification') : cert, req: 'Must Have', has: 'Not Found', status: 'Missing' }));
 
         setPreviewData({
             to: toEmail,
