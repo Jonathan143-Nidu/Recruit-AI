@@ -370,7 +370,15 @@ export default function MatchResultsPage() {
 
             return {
                 to: cand.Sender || cand.Email,
-                candidate: { displayName: recipient.name, gaps: gaps, name: cand.Name },
+                candidate: { 
+                    displayName: recipient.name, 
+                    gaps: gaps, 
+                    name: cand.Name,
+                    missingSkills: cand.missingSkills || [],
+                    missingCertifications: cand.missingCertifications || [],
+                    partialMatchSkills: cand.partialMatchSkills || [],
+                    matchPercentage: cand.matchPercentage || 0
+                },
                 body: `Hello ${recipient.name},\n\nWe've carefully reviewed your profile against our current opening. Based on our AI-driven "Forensic Analysis", here is your detailed match report.`,
                 matchedSkills: cand.matchedSkills || [],
                 partialMatchSkills: cand.partialMatchSkills || [],
@@ -472,7 +480,16 @@ export default function MatchResultsPage() {
             subject: `Match Report: ${jobTitle || 'New Opening'} - ${candidate.Name}`,
             body: `Hello ${recipient.name},\n\nWe've carefully reviewed your profile against our current opening. Based on our AI-driven "Forensic Analysis", here is your detailed match report.`,
             signature: '\n\nBest regards,\nRecruiting Team\nInnovcentric LLC',
-            candidate: { displayName: recipient.name, gaps: gaps, requiredDetails: requiredDetails },
+            candidate: { 
+                displayName: recipient.name, 
+                gaps: gaps, 
+                requiredDetails: requiredDetails,
+                missingSkills: candidate.missingSkills || [],
+                missingCertifications: candidate.missingCertifications || [],
+                partialMatchSkills: candidate.partialMatchSkills || [],
+                matchPercentage: candidate.matchPercentage || 0,
+                name: candidate.Name
+            },
             jobInfo: { title: jobTitle, location: location, rate: rate, exp: expRange, client: client, mode: workMode, visa: visa, jdLink: jdLink },
             index: index
         });
@@ -1826,32 +1843,87 @@ Innovcentric LLC`;
 
                                             <div style={{ fontSize: '10px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>Gap Analysis</div>
 
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', marginBottom: '15px' }}>
-                                                <thead>
-                                                    <tr style={{ textAlign: 'left', background: '#f8fafc' }}>
-                                                        <th style={{ padding: '4px 8px', color: '#64748b' }}>Skill</th>
-                                                        <th style={{ padding: '4px 8px', color: '#64748b' }}>Req</th>
-                                                        <th style={{ padding: '4px 8px', color: '#64748b' }}>CV Status</th>
-                                                        <th style={{ padding: '4px 8px', color: '#64748b' }}>Status</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {previewData.candidate?.gaps.map((g, gi) => (
-                                                        <tr key={gi} style={{ borderBottom: '1px solid #f8fafc' }}>
-                                                            <td style={{ padding: '4px 8px', color: '#1e293b', fontWeight: '800' }}>{g.skill}</td>
-                                                            <td style={{ padding: '4px 8px', color: '#475569', fontWeight: '700' }}>{g.req}</td>
-                                                            <td style={{ padding: '4px 8px', color: g.status === 'Missing' ? '#ef4444' : '#f59e0b', fontWeight: '900' }}>{g.has}</td>
-                                                            <td style={{ padding: '4px 8px' }}>
-                                                                <span style={{
-                                                                    padding: '1px 5px', borderRadius: '3px', fontSize: '8px', fontWeight: '800',
-                                                                    background: g.status === 'Missing' ? '#fee2e2' : '#fef3c7',
-                                                                    color: g.status === 'Missing' ? '#ef4444' : '#f59e0b'
-                                                                }}>{g.status}</span>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                            {/* CATEGORIZED GAP ANALYSIS (PREMIUM REDESIGN) */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '20px' }}>
+                                                
+                                                {/* 1. MISSING SKILLS */}
+                                                {(previewData.candidate?.missingSkills?.length > 0) && (
+                                                    <div>
+                                                        <div style={{ fontSize: '11px', fontWeight: '800', color: '#e11d48', marginBottom: '6px' }}>Missing Skills:</div>
+                                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                                                            <thead>
+                                                                <tr style={{ textAlign: 'left', background: '#f8fafc', borderBottom: '1.5px solid #fee2e2' }}>
+                                                                    <th style={{ padding: '6px 8px', color: '#94a3b8', textTransform: 'uppercase', fontSize: '9px' }}>Missing Skills</th>
+                                                                    <th style={{ padding: '6px 8px', color: '#94a3b8', textTransform: 'uppercase', fontSize: '9px', textAlign: 'center' }}>JD Req</th>
+                                                                    <th style={{ padding: '6px 8px', color: '#94a3b8', textTransform: 'uppercase', fontSize: '9px', textAlign: 'center' }}>Has</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {previewData.candidate.missingSkills.map((s, si) => (
+                                                                    <tr key={si} style={{ borderBottom: '1px solid #fee2e2' }}>
+                                                                        <td style={{ padding: '6px 8px', color: '#1e293b', fontWeight: '800' }}>• {typeof s === 'string' ? s : s.skill}</td>
+                                                                        <td style={{ padding: '6px 8px', color: '#64748b', textAlign: 'center', fontWeight: '700' }}>Must Have</td>
+                                                                        <td style={{ padding: '6px 8px', color: '#ef4444', textAlign: 'center', fontWeight: '900' }}>0m</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+
+                                                {/* 2. MISSING CERTIFICATIONS */}
+                                                {(previewData.candidate?.missingCertifications?.length > 0) && (
+                                                    <div>
+                                                        <div style={{ fontSize: '11px', fontWeight: '800', color: '#e11d48', marginBottom: '6px' }}>Missing Certifications:</div>
+                                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                                                            <thead>
+                                                                <tr style={{ textAlign: 'left', background: '#f8fafc', borderBottom: '1.5px solid #fee2e2' }}>
+                                                                    <th style={{ padding: '6px 8px', color: '#94a3b8', textTransform: 'uppercase', fontSize: '9px' }}>Missing Certifications</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {previewData.candidate.missingCertifications.map((c, ci) => (
+                                                                    <tr key={ci} style={{ borderBottom: '1px solid #fee2e2' }}>
+                                                                        <td style={{ padding: '6px 8px', color: '#1e293b', fontWeight: '800' }}>• {typeof c === 'string' ? c : (c.name || c.skill)}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+
+                                                {/* 3. PARTIAL MATCH SKILLS */}
+                                                {(previewData.candidate?.partialMatchSkills?.length > 0) && (
+                                                    <div>
+                                                        <div style={{ fontSize: '11px', fontWeight: '800', color: '#f59e0b', marginBottom: '6px' }}>Partial Match Skills:</div>
+                                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                                                            <thead>
+                                                                <tr style={{ textAlign: 'left', background: '#f8fafc', borderBottom: '1.5px solid #fef3c7' }}>
+                                                                    <th style={{ padding: '6px 8px', color: '#94a3b8', textTransform: 'uppercase', fontSize: '9px' }}>Partial</th>
+                                                                    <th style={{ padding: '6px 8px', color: '#94a3b8', textTransform: 'uppercase', fontSize: '9px', textAlign: 'center' }}>JD Req</th>
+                                                                    <th style={{ padding: '6px 8px', color: '#94a3b8', textTransform: 'uppercase', fontSize: '9px', textAlign: 'center' }}>Has</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {previewData.candidate.partialMatchSkills.map((p, pi) => (
+                                                                    <tr key={pi} style={{ borderBottom: '1px solid #fef3c7' }}>
+                                                                        <td style={{ padding: '6px 8px', color: '#1e293b', fontWeight: '800' }}>• {p.skill}</td>
+                                                                        <td style={{ padding: '6px 8px', color: '#475569', textAlign: 'center', fontWeight: '700' }}>{p.jdRequirement || p.req || '-'}</td>
+                                                                        <td style={{ padding: '6px 8px', color: '#f59e0b', textAlign: 'center', fontWeight: '900' }}>{p.candidateHas || p.has || '-'}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+
+                                                {/* SUMMARY PERCENTAGES */}
+                                                <div style={{ marginTop: '5px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                    <div style={{ fontSize: '11px', fontWeight: '900', color: '#0f172a', marginBottom: '4px' }}>Resume Percentage to JD:</div>
+                                                    <div style={{ fontSize: '10px', color: '#6366f1', fontWeight: '700' }}>(match skills + Partial skills) {previewData.candidate?.matchPercentage}%</div>
+                                                    <div style={{ fontSize: '10px', color: '#ef4444', fontWeight: '700' }}>Missing skills {100 - (previewData.candidate?.matchPercentage || 0)}%</div>
+                                                </div>
+                                            </div>
 
                                             <div style={{ display: 'inline-block', padding: '6px 12px', background: '#6366f1', color: '#fff', borderRadius: '4px', fontSize: '10px', fontWeight: '700', cursor: 'pointer' }}>View More Jobs</div>
 
