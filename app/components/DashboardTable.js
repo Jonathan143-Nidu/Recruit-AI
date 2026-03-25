@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -148,17 +148,18 @@ export default function DashboardTable({ data, headers, session }) {
     // Logic for Selection
     const handleSelectAll = (e) => {
         if (e.target.checked) {
-            const currentIndices = new Set(currentItems.map((_, i) => indexOfFirstItem + i));
+            const currentIndices = new Set(currentItems.map(item => item.originalIndex));
             setSelectedRows(new Set([...selectedRows, ...currentIndices]));
         } else {
             const newSelected = new Set(selectedRows);
-            currentItems.forEach((_, i) => newSelected.delete(indexOfFirstItem + i));
+            currentItems.forEach(item => newSelected.delete(item.originalIndex));
             setSelectedRows(newSelected);
         }
     };
 
     const handleSelectRow = (e, globalIndex) => {
         const newSelected = new Set(selectedRows);
+        const originalIndex = filteredData[globalIndex].originalIndex;
 
         if (e.nativeEvent.shiftKey && lastSelectedIndex !== null) {
             const start = Math.min(lastSelectedIndex, globalIndex);
@@ -166,17 +167,18 @@ export default function DashboardTable({ data, headers, session }) {
 
             // Should we add or remove in the range? 
             // Usually, if the first click was selecting, shift range will select.
-            const isSelecting = !selectedRows.has(globalIndex);
+            const isSelecting = !selectedRows.has(originalIndex);
 
             for (let i = start; i <= end; i++) {
-                if (isSelecting) newSelected.add(i);
-                else newSelected.delete(i);
+                const rowOriginalIndex = filteredData[i].originalIndex;
+                if (isSelecting) newSelected.add(rowOriginalIndex);
+                else newSelected.delete(rowOriginalIndex);
             }
         } else {
-            if (newSelected.has(globalIndex)) {
-                newSelected.delete(globalIndex);
+            if (newSelected.has(originalIndex)) {
+                newSelected.delete(originalIndex);
             } else {
-                newSelected.add(globalIndex);
+                newSelected.add(originalIndex);
             }
         }
 
@@ -184,7 +186,7 @@ export default function DashboardTable({ data, headers, session }) {
         setLastSelectedIndex(globalIndex);
     };
 
-    const isAllSelected = currentItems.length > 0 && currentItems.every((_, i) => selectedRows.has(indexOfFirstItem + i));
+    const isAllSelected = currentItems.length > 0 && currentItems.every(item => selectedRows.has(item.originalIndex));
 
 
 
@@ -211,8 +213,9 @@ export default function DashboardTable({ data, headers, session }) {
         const linkedInIdx = idx("LinkedIn");
         const senderIdx = idx("Sender");
 
-        const selectedData = Array.from(selectedRows).map(index => {
-            const row = filteredData[index];
+        const selectedData = Array.from(selectedRows).map(originalIdx => {
+            const row = data[originalIdx];
+            if (!row) return null;
             return {
                 Name: nameIdx !== -1 ? row[nameIdx] : "N/A",
                 Role: roleIdx !== -1 ? row[roleIdx] : "N/A",
@@ -225,7 +228,7 @@ export default function DashboardTable({ data, headers, session }) {
                 LinkedIn: linkedInIdx !== -1 ? row[linkedInIdx] : "N/A",
                 Sender: senderIdx !== -1 ? row[senderIdx] : "N/A"
             };
-        });
+        }).filter(Boolean);
 
         if (selectedData.length === 0) return;
 
@@ -246,10 +249,10 @@ export default function DashboardTable({ data, headers, session }) {
 
         setIsDeleting(true);
 
-        const selectedIndices = Array.from(selectedRows).map(idx => {
+        const selectedIndices = Array.from(selectedRows).map(originalIdx => {
             // Find the original global row index taking filtering/sorting into account
             // +2 to account for 0-indexing and the Header row in Google Sheets
-            return filteredData[idx].originalIndex + 2;
+            return originalIdx + 2;
         });
 
         try {
@@ -332,7 +335,7 @@ export default function DashboardTable({ data, headers, session }) {
         if (h.includes('dob') && !isNaN(cell) && cell.toString().trim().length === 5) {
             const dateNum = parseFloat(cell);
             const date = new Date((dateNum - 25569) * 86400 * 1000);
-            return date.toLocaleDateString();
+            return date.toLocaleDateString('en-US');
         }
 
         if (h.includes('phone') && typeof cell === 'number') {
@@ -843,10 +846,10 @@ export default function DashboardTable({ data, headers, session }) {
                         <tbody>
                             {currentItems.map((row, i) => {
                                 const globalIndex = indexOfFirstItem + i;
-                                const isSelected = selectedRows.has(globalIndex);
+                                const isSelected = selectedRows.has(row.originalIndex);
 
                                 return (
-                                    <tr key={globalIndex} className="row-hover" style={{
+                                    <tr key={row.originalIndex} className="row-hover" style={{
                                         borderBottom: '1px solid #f1f5f9',
                                         background: isSelected ? 'linear-gradient(135deg, #eef2ff, #f5f3ff)' : 'white',
                                         transition: 'background 0.15s'

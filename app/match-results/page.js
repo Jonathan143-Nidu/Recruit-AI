@@ -357,14 +357,15 @@ export default function MatchResultsPage() {
             const recipient = getRecipientInfo(cand.Name, cand.Sender || cand.Email);
             const gaps = [];
             cand.partialMatchSkills?.forEach(s => {
-                const hasZeroExp = s.has?.includes('0 years') || s.has?.includes('0 months') || s.has === '0';
+                const hasExp = s.candidateHas || s.has || '';
+                const hasZeroExp = hasExp.includes('0 years') || hasExp.includes('0 months') || hasExp === '0';
                 if (hasZeroExp) {
-                    gaps.push({ skill: s.skill, req: s.req, has: 'Not Found', status: 'Missing' });
+                    gaps.push({ skill: s.skill, req: s.jdRequirement || s.req, has: 'Not Found', status: 'Missing' });
                 } else {
-                    gaps.push({ skill: s.skill, req: s.req, has: s.has, status: 'Partial Match' });
+                    gaps.push({ skill: s.skill, req: s.jdRequirement || s.req, has: hasExp, status: 'Partial Match' });
                 }
             });
-            cand.missingSkills?.forEach(s => gaps.push({ skill: typeof s === 'string' ? s : s.skill, req: 'Required', has: 'Not Found', status: 'Missing' }));
+            cand.missingSkills?.forEach(s => gaps.push({ skill: typeof s === 'string' ? s : s.skill, req: typeof s === 'object' ? (s.jdRequirement || s.req || 'Required') : 'Required', has: 'Not Found', status: 'Missing' }));
 
             return {
                 to: cand.Sender || cand.Email,
@@ -453,14 +454,15 @@ export default function MatchResultsPage() {
         // Prepare initial content with defensive categorization
         const gaps = [];
         candidate.partialMatchSkills?.forEach(s => {
-            const hasZeroExp = s.has?.includes('0 years') || s.has?.includes('0 months') || s.has === '0';
+            const hasExp = s.candidateHas || s.has || '';
+            const hasZeroExp = hasExp.includes('0 years') || hasExp.includes('0 months') || hasExp === '0';
             if (hasZeroExp) {
-                gaps.push({ skill: s.skill, req: s.req, has: 'Not Found', status: 'Missing' });
+                gaps.push({ skill: s.skill, req: s.jdRequirement || s.req, has: 'Not Found', status: 'Missing' });
             } else {
-                gaps.push({ skill: s.skill, req: s.req, has: s.has, status: 'Partial Match' });
+                gaps.push({ skill: s.skill, req: s.jdRequirement || s.req, has: hasExp, status: 'Partial Match' });
             }
         });
-        candidate.missingSkills?.forEach(s => gaps.push({ skill: typeof s === 'string' ? s : s.skill, req: 'Required', has: 'Not Found', status: 'Missing' }));
+        candidate.missingSkills?.forEach(s => gaps.push({ skill: typeof s === 'string' ? s : s.skill, req: typeof s === 'object' ? (s.jdRequirement || s.req || 'Required') : 'Required', has: 'Not Found', status: 'Missing' }));
 
         setPreviewData({
             to: toEmail,
@@ -613,8 +615,8 @@ export default function MatchResultsPage() {
 
         partial.forEach(s => {
             const skillName = (s.skill || '').padEnd(20).substring(0, 20);
-            const req = (s.req || '').padEnd(10).substring(0, 10);
-            const has = (s.has || '').padEnd(10).substring(0, 10);
+            const req = (s.jdRequirement || s.req || '').padEnd(10).substring(0, 10);
+            const has = (s.candidateHas || s.has || '').padEnd(10).substring(0, 10);
             skillsTable += `| ${skillName} | ${req} | ${has} | Partial Match\n`;
         });
 
@@ -650,15 +652,17 @@ Innovcentric LLC`;
 
 
     // [NEW] Portal Tooltip State
-    const [tooltipData, setTooltipData] = useState({ visible: false, content: null, x: 0, y: 0 });
+    const [tooltipData, setTooltipData] = useState({ visible: false, content: null, x: 0, y: 0, showAbove: false });
 
     const handleMouseEnter = (e, content) => {
         const rect = e.currentTarget.getBoundingClientRect();
+        const showAbove = rect.bottom > window.innerHeight - 200;
         setTooltipData({
             visible: true,
             content,
             x: rect.left + rect.width / 2,
-            y: rect.bottom + 10 // Position below
+            y: showAbove ? rect.top - 10 : rect.bottom + 10,
+            showAbove
         });
     };
 
@@ -1284,7 +1288,7 @@ Innovcentric LLC`;
                                                                     <ul style={{ paddingLeft: '8px', margin: 0, listStyle: 'none' }}>
                                                                         {c.partialMatchSkills.map((p, idx) => (
                                                                             <li key={idx} style={{ marginBottom: '2px' }}>
-                                                                                <span style={{ color: '#fff' }}>{p.skill}</span> <span style={{ fontSize: '10px', color: '#aaa' }}>(Has {p.has} / Req {p.req})</span>
+                                                                                <span style={{ color: '#fff' }}>{p.skill}</span> <span style={{ fontSize: '10px', color: '#aaa' }}>(Has {p.candidateHas || p.has || '-'} / Req {p.jdRequirement || p.req || '-'})</span>
                                                                             </li>
                                                                         ))}
                                                                     </ul>
@@ -1383,8 +1387,8 @@ Innovcentric LLC`;
                                                                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
                                                                                         <thead>
                                                                                             <tr style={{ borderBottom: '1px solid #fee2e2' }}>
-                                                                                                <th style={{ textAlign: 'left', padding: '4px', color: '#94a3b8' }}>Missing Skills</th>
-                                                                                                <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8' }}>JD Req</th>
+                                                                                                <th style={{ textAlign: 'left', padding: '4px', color: '#94a3b8', whiteSpace: 'nowrap' }}>Missing Skills</th>
+                                                                                                <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8', whiteSpace: 'nowrap' }}>JD Req</th>
                                                                                                 <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8' }}>Has</th>
                                                                                             </tr>
                                                                                         </thead>
@@ -1392,7 +1396,7 @@ Innovcentric LLC`;
                                                                                             {(c.missingSkills || []).map((ms, idx) => (
                                                                                                 <tr key={idx} style={{ borderBottom: '1px solid #f8fafc' }}>
                                                                                                     <td style={{ padding: '4px', fontWeight: '700' }}>• {typeof ms === 'object' ? ms.skill : ms}</td>
-                                                                                                    <td style={{ padding: '4px', textAlign: 'center' }}>{typeof ms === 'object' ? (ms.req || '-') : '-'}</td>
+                                                                                                    <td style={{ padding: '4px', textAlign: 'center' }}>{typeof ms === 'object' ? (ms.jdRequirement || ms.req || '-') : '-'}</td>
                                                                                                     <td style={{ padding: '4px', textAlign: 'center' }}>{typeof ms === 'object' ? (ms.has || '0m') : '0m'}</td>
                                                                                                 </tr>
                                                                                             ))}
@@ -1423,7 +1427,7 @@ Innovcentric LLC`;
                                                                             )}
                                                                             {/* Partial Match Skills Table */}
                                                                             {c.partialMatchSkills && c.partialMatchSkills.filter(ps => {
-                                                                                const hasVal = String(ps.has || '').toLowerCase().trim();
+                                                                                const hasVal = String(ps.candidateHas || ps.has || '').toLowerCase().trim();
                                                                                 return hasVal !== '' && !hasVal.startsWith('0');
                                                                             }).length > 0 && (
                                                                                     <div>
@@ -1431,20 +1435,20 @@ Innovcentric LLC`;
                                                                                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
                                                                                             <thead>
                                                                                                 <tr style={{ borderBottom: '1px solid #ffedd5' }}>
-                                                                                                    <th style={{ textAlign: 'left', padding: '4px', color: '#94a3b8' }}>Partial Match Skills</th>
-                                                                                                    <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8' }}>JD Req</th>
-                                                                                                    <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8' }}>Has</th>
+                                                                                                    <th style={{ textAlign: 'left', padding: '4px', color: '#94a3b8', whiteSpace: 'nowrap' }}>PARTIAL</th>
+                                                                                                    <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8', whiteSpace: 'nowrap' }}>JD REQ</th>
+                                                                                                    <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8' }}>HAS</th>
                                                                                                 </tr>
                                                                                             </thead>
                                                                                             <tbody>
                                                                                                 {c.partialMatchSkills.filter(ps => {
-                                                                                                    const hasVal = String(ps.has || '').toLowerCase().trim();
+                                                                                                    const hasVal = String(ps.candidateHas || ps.has || '').toLowerCase().trim();
                                                                                                     return hasVal !== '' && !hasVal.startsWith('0');
                                                                                                 }).map((ps, idx) => (
                                                                                                     <tr key={idx} style={{ borderBottom: '1px solid #f8fafc' }}>
                                                                                                         <td style={{ padding: '4px', fontWeight: '700' }}>• {ps.skill}</td>
-                                                                                                        <td style={{ padding: '4px', textAlign: 'center' }}>{ps.req}</td>
-                                                                                                        <td style={{ padding: '4px', textAlign: 'center' }}>{ps.has}</td>
+                                                                                                        <td style={{ padding: '4px', textAlign: 'center' }}>{ps.jdRequirement || ps.req || '-'}</td>
+                                                                                                        <td style={{ padding: '4px', textAlign: 'center' }}>{ps.candidateHas || ps.has || '-'}</td>
                                                                                                     </tr>
                                                                                                 ))}
                                                                                             </tbody>
@@ -1572,7 +1576,8 @@ Innovcentric LLC`;
                 tooltipData.visible && (
                     <div style={{
                         position: 'fixed',
-                        top: tooltipData.y,
+                        top: tooltipData.showAbove ? 'auto' : tooltipData.y,
+                        bottom: tooltipData.showAbove ? (window.innerHeight - tooltipData.y) : 'auto',
                         left: tooltipData.x,
                         transform: 'translate(-50%, 0)', // Center horizontally
                         zIndex: 9999,
@@ -1589,12 +1594,16 @@ Innovcentric LLC`;
                     }}>
                         <div style={{
                             position: 'absolute',
-                            bottom: '100%',
+                            ...(tooltipData.showAbove ? {
+                                top: '100%',
+                            } : {
+                                bottom: '100%',
+                            }),
                             left: '50%',
                             marginLeft: '-5px',
                             borderWidth: '5px',
                             borderStyle: 'solid',
-                            borderColor: 'transparent transparent #333 transparent'
+                            borderColor: tooltipData.showAbove ? '#333 transparent transparent transparent' : 'transparent transparent #333 transparent'
                         }}></div>
                         {tooltipData.content}
                     </div>

@@ -55,7 +55,8 @@ export async function POST(req) {
         console.time("Field-Extraction-AI-Call");
         const completion = await getAICompletion({
             messages: [{ role: "system", content: prompt }],
-            model: "gpt-4o-mini",
+            model: "deepseek-chat",
+            provider: "deepseek",
             temperature: 0.0,
             response_format: { type: "json_object" },
             timeout: 60000,
