@@ -346,6 +346,19 @@ export default function MatchResultsPage() {
             console.log(`Auto-selected ${addedCount} more candidates.`);
         }
     };
+    // Helper: Consolidate Sender + Candidate emails & filter internal domain
+    const getValidEmails = (candidate) => {
+        const emails = [];
+        if (candidate.Sender) emails.push(candidate.Sender);
+        if (candidate.Email) emails.push(candidate.Email);
+        
+        return emails
+            .map(e => e.trim())
+            .filter(e => e !== "" && !e.toLowerCase().includes("@innovcentric.com"))
+            .filter((v, i, a) => a.indexOf(v) === i) // Unique
+            .join(", ");
+    };
+
     const handleBulkEmail = async () => {
         if (selectedIndices.size === 0) {
             alert("Please select at least one candidate to send bulk emails.");
@@ -369,7 +382,7 @@ export default function MatchResultsPage() {
             cand.missingCertifications?.forEach(cert => gaps.push({ skill: typeof cert === 'object' ? (cert.name || cert.skill || 'Certification') : cert, req: 'Must Have', has: 'Not Found', status: 'Missing' }));
 
             return {
-                to: cand.Sender || cand.Email,
+                to: getValidEmails(cand),
                 candidate: { 
                     displayName: recipient.name, 
                     gaps: gaps, 
@@ -386,10 +399,18 @@ export default function MatchResultsPage() {
             };
         });
 
-        setBulkSendList(bulkList);
+        // FILTER out candidates with no valid emails for bulk send
+        const filteredBulkList = bulkList.filter(item => item.to !== "");
+
+        if (filteredBulkList.length === 0) {
+            alert("None of the selected candidates have a valid external email address.");
+            return;
+        }
+
+        setBulkSendList(filteredBulkList);
         setCurrentBulkIndex(0);
 
-        const firstBulkItem = bulkList[0];
+        const firstBulkItem = filteredBulkList[0];
         if (!firstBulkItem || !firstBulkItem.candidate) {
             alert("No valid candidate data found.");
             return;
@@ -451,14 +472,14 @@ export default function MatchResultsPage() {
     };
 
     const handleSendRichEmail = (candidate, index) => {
-        const toEmail = candidate.Sender || candidate.Email;
+        const toEmail = getValidEmails(candidate);
         if (!toEmail) {
             alert("No email address found for this candidate.");
             return;
         }
 
-        const recipient = getRecipientInfo(candidate.Name, toEmail);
-        const ccEmail = (candidate.Sender && candidate.Email) ? candidate.Email : '';
+        const recipient = getRecipientInfo(candidate.Name, toEmail.split(',')[0]); // Use first primary email for greeting
+        const ccEmail = ''; // Consolidating all in TO field
 
         // Prepare initial content with defensive categorization
         const gaps = [];
@@ -1412,8 +1433,8 @@ Innovcentric LLC`;
                                                                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
                                                                                         <thead>
                                                                                             <tr style={{ borderBottom: '1px solid #fee2e2' }}>
-                                                                                                <th style={{ textAlign: 'left', padding: '4px', color: '#94a3b8', whiteSpace: 'nowrap' }}>Missing Skills</th>
-                                                                                                <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8', whiteSpace: 'nowrap' }}>JD Req</th>
+                                                                                                <th style={{ textAlign: 'left', padding: '4px', color: '#94a3b8', whiteWhiteSpace: 'nowrap' }}>Missing Skills</th>
+                                                                                                <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8', whiteWhiteSpace: 'nowrap' }}>JD Req</th>
                                                                                                 <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8' }}>Has</th>
                                                                                             </tr>
                                                                                         </thead>
@@ -1460,8 +1481,8 @@ Innovcentric LLC`;
                                                                                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
                                                                                             <thead>
                                                                                                 <tr style={{ borderBottom: '1px solid #ffedd5' }}>
-                                                                                                    <th style={{ textAlign: 'left', padding: '4px', color: '#94a3b8', whiteSpace: 'nowrap' }}>PARTIAL</th>
-                                                                                                    <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8', whiteSpace: 'nowrap' }}>JD REQ</th>
+                                                                                                    <th style={{ textAlign: 'left', padding: '4px', color: '#94a3b8', whiteWhiteSpace: 'nowrap' }}>PARTIAL</th>
+                                                                                                    <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8', whiteWhiteSpace: 'nowrap' }}>JD REQ</th>
                                                                                                     <th style={{ textAlign: 'center', padding: '4px', color: '#94a3b8' }}>HAS</th>
                                                                                                 </tr>
                                                                                             </thead>
@@ -1530,28 +1551,39 @@ Innovcentric LLC`;
                                                                 </div>
                                                             </td>
                                                             <td style={{ padding: '6px 12px', textAlign: 'center', borderRadius: '0 8px 8px 0' }}>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleSendRichEmail(c, i);
-                                                                    }}
-                                                                    disabled={sendingEmails[i] === 'sending'}
-                                                                    className="corp-button"
-                                                                    style={{
-                                                                        display: 'inline-block',
-                                                                        padding: '4px 10px',
-                                                                        borderRadius: '6px',
-                                                                        fontSize: '10px',
-                                                                        background: sendingEmails[i] === 'sent' ? '#10b981' : (sendingEmails[i] === 'sending' ? '#94a3b8' : '#6366f1'),
-                                                                        color: 'white',
-                                                                        border: 'none',
-                                                                        cursor: 'pointer',
-                                                                        transition: 'all 0.2s',
-                                                                        fontWeight: '700'
-                                                                    }}
-                                                                >
-                                                                    {sendingEmails[i] === 'sent' ? '✅ Sent' : (sendingEmails[i] === 'sending' ? '⌛ ...' : '✉️ Send')}
-                                                                </button>
+                                                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                                                    {(() => {
+                                                                        const validEmails = getValidEmails(c);
+                                                                        if (sendingEmails[i] === 'sent') {
+                                                                            return (
+                                                                                <span className="px-3 py-1 bg-green-50 text-green-600 rounded-full text-[10px] font-bold border border-green-100 flex items-center justify-center gap-1.5" style={{ whiteSpace: 'nowrap' }}>
+                                                                                    ✅ SENT
+                                                                                </span>
+                                                                            );
+                                                                        }
+                                                                        if (!validEmails) {
+                                                                            return (
+                                                                                <button
+                                                                                    onClick={(e) => { e.stopPropagation(); handleSendRichEmail(c, i); }}
+                                                                                    className="px-3 py-1 bg-red-600 text-white rounded-md text-[10px] font-bold hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                                                                                    style={{ border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                                                                >
+                                                                                    NO EMAIL
+                                                                                </button>
+                                                                            );
+                                                                        }
+                                                                        return (
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleSendRichEmail(c, i); }}
+                                                                                disabled={sendingEmails[i] === 'sending'}
+                                                                                className="px-4 py-1.5 bg-indigo-600 text-white rounded-md text-[10px] font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5 shadow-sm group"
+                                                                                style={{ border: 'none', cursor: 'pointer' }}
+                                                                            >
+                                                                                {sendingEmails[i] === 'sending' ? '⌛ ...' : '✉️ Send'}
+                                                                            </button>
+                                                                        );
+                                                                    })()}
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     );
