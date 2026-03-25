@@ -398,7 +398,7 @@ export default function MatchResultsPage() {
         setPreviewData({
             to: firstBulkItem.to,
             cc: '',
-            subject: `Match Report: ${jobTitle || 'New Opening'} - ${firstBulkItem.candidate.name}`,
+            subject: `${firstBulkItem.candidate.name}: ${jobTitle || 'New Opening'} - Match Report`,
             body: firstBulkItem.body,
             signature: '\n\nBest regards,\nRecruiting Team\nInnovcentric LLC',
             candidate: { ...firstBulkItem.candidate, requiredDetails: requiredDetails },
@@ -427,7 +427,7 @@ export default function MatchResultsPage() {
         setPreviewData(prev => ({
             ...prev,
             to: nextItem.to,
-            subject: `Match Report: ${jobTitle || 'New Opening'} - ${nextItem.candidate.name}`,
+            subject: `${nextItem.candidate.name}: ${jobTitle || 'New Opening'} - Match Report`,
             body: nextItem.body, // Use the stored (potentially edited) body
             candidate: { ...nextItem.candidate, requiredDetails: requiredDetails }
         }));
@@ -477,7 +477,7 @@ export default function MatchResultsPage() {
         setPreviewData({
             to: toEmail,
             cc: ccEmail,
-            subject: `Match Report: ${jobTitle || 'New Opening'} - ${candidate.Name}`,
+            subject: `${candidate.Name}: ${jobTitle || 'New Opening'} - Match Report`,
             body: `Hello ${recipient.name},\n\nWe've carefully reviewed your profile against our current opening. Based on our AI-driven "Forensic Analysis", here is your detailed match report.`,
             signature: '\n\nBest regards,\nRecruiting Team\nInnovcentric LLC',
             candidate: { 
