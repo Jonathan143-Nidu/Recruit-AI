@@ -612,12 +612,18 @@ export default function MatchResultsPage() {
 
         const missing = candidate.missingSkills || [];
         const partial = candidate.partialMatchSkills || [];
+        const certifications = candidate.missingCertifications || [];
 
         partial.forEach(s => {
             const skillName = (s.skill || '').padEnd(20).substring(0, 20);
             const req = (s.jdRequirement || s.req || '').padEnd(10).substring(0, 10);
             const has = (s.candidateHas || s.has || '').padEnd(10).substring(0, 10);
             skillsTable += `| ${skillName} | ${req} | ${has} | Partial Match\n`;
+        });
+
+        certifications.forEach(c => {
+            const certName = (typeof c === 'string' ? c : (c.name || c.skill || '')).padEnd(20).substring(0, 20);
+            skillsTable += `| ${certName} | Required  | Missing   | Missing Cert\n`;
         });
 
         missing.forEach(s => {
