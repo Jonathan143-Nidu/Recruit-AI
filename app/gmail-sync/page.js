@@ -148,17 +148,55 @@ export default function GmailSyncPage() {
                             setMismatches(prev => [...prev, mismatch]);
                         }
 
-                        currentCandidates[globalIdx].processed = true;
                         currentCandidates[globalIdx].fullData = info;
                         currentCandidates[globalIdx].folder = result.details?.[0]?.folder || result.folder;
-                        setCandidates([...currentCandidates]);
+                        currentCandidates[globalIdx].error = false;
+                    } else {
+                        currentCandidates[globalIdx].error = true;
+                        setLogs(prev => [...prev.slice(-10), `Error: ${cand.from.split('<')[0].trim()} failed.`]);
                     }
                 } catch (e) {
                     console.error("Process error:", e);
+                    currentCandidates[globalIdx].error = true;
+                    setLogs(prev => [...prev.slice(-10), `Network Error: ${cand.from.split('<')[0].trim()}`]);
+                } finally {
+                    // [FIX] ALWAYS mark as processed so the progress tracker reaches 100%
+                    currentCandidates[globalIdx].processed = true;
+                    setCandidates([...currentCandidates]);
                 }
             });
             await Promise.all(promises);
         }
+
+        // [LOG TO HISTORY] Record this sync session in the Analysis History table
+        try {
+            const finalCount = currentCandidates.filter(c => c.processed).length;
+            if (finalCount > 0) {
+                await fetch('/api/history', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jd: `GMAIL SYNC: "${subject}" (${startDate} to ${endDate})`,
+                        count: finalCount,
+                        results: currentCandidates.filter(c => c.processed).map(c => ({
+                            Name: c.fullData?.Name || 'Unknown',
+                            Role: c.fullData?.Role || subject,
+                            Email: c.fullData?.Email || c.from,
+                            Phone: c.fullData?.Phone || 'N/A',
+                            Resume: c.folder,
+                            LinkedIn: c.fullData?.LinkedIn || '',
+                            "Years of Experience": c.fullData?.["Years of Experience"] || 'N/A',
+                            Visa: c.fullData?.Visa || 'N/A'
+                        })),
+                        processedBy: session?.user?.email || 'Unknown User'
+                    })
+                });
+                setLogs(prev => [...prev.slice(-10), "Sync session logged to History."]);
+            }
+        } catch (hErr) {
+            console.error("Failed to log history:", hErr);
+        }
+
         setIsProcessing(false);
         if (mismatches.length > 0) setShowReview(true);
     };
@@ -332,8 +370,9 @@ export default function GmailSyncPage() {
                                 <tbody>
                                     {candidates.map((c) => {
                                         const d = c.fullData || {};
+                                        const rowBackground = c.error ? '#fef2f2' : (c.processed ? '#f0fdf4' : 'transparent');
                                         return (
-                                            <tr key={c.id} style={{ background: c.processed ? '#f0fdf4' : 'transparent', borderBottom: '1px solid #f1f5f9' }}>
+                                            <tr key={c.id} style={{ background: rowBackground, borderBottom: '1px solid #f1f5f9' }}>
                                                 <td style={{ padding: '20px 24px' }}>
                                                     <div style={{ fontWeight: '700', color: '#1e293b' }}>{d.Name || 'Detecting...'}</div>
                                                     <div style={{ fontSize: '12px', color: '#64748b' }}>{d.Role || c.subject}</div>
@@ -344,16 +383,26 @@ export default function GmailSyncPage() {
                                                 </td>
                                                 <td style={{ padding: '20px 24px' }}>
                                                     <div style={{ display: 'flex', gap: '8px' }}>
-                                                        {c.processed ? (
+                                                        {c.processed && !c.error ? (
                                                             <>
                                                                 <a href={c.folder} target="_blank" className="badge" style={{ color: '#10b981', background: '#ecfdf5' }}>DRIVE</a>
                                                                 {d.LinkedIn && <a href={d.LinkedIn} target="_blank" className="badge" style={{ color: '#6366f1', background: '#f5f7ff' }}>LINKEDIN</a>}
                                                             </>
-                                                        ) : <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Pending sync...</span>}
+                                                        ) : (
+                                                            <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>
+                                                                {c.error ? 'Sync failed' : 'Pending sync...'}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '20px 24px', textAlign: 'center' }}>
-                                                    {c.processed ? <span className="badge" style={{ color: '#10b981', background: '#dcfce7' }}>SYNCED ✅</span> : <span className="badge" style={{ color: '#94a3b8', background: '#f8fafc' }}>READY</span>}
+                                                    {c.error ? (
+                                                        <span className="badge" style={{ color: '#ef4444', background: '#fef2f2' }}>FAILED ❌</span>
+                                                    ) : c.processed ? (
+                                                        <span className="badge" style={{ color: '#10b981', background: '#dcfce7' }}>SYNCED ✅</span>
+                                                    ) : (
+                                                        <span className="badge" style={{ color: '#94a3b8', background: '#f8fafc' }}>READY</span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         );

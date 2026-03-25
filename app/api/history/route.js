@@ -30,9 +30,45 @@ export async function GET() {
         return NextResponse.json({ history });
     } catch (error) {
         console.error("History API Error:", error);
-        // If sheet doesn't exist, return empty list instead of error
         if (error.message.includes("Unable to parse range")) {
             return NextResponse.json({ history: [] });
+        }
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}
+
+export async function POST(req) {
+    try {
+        const body = await req.json();
+        const { jd, count, results, processedBy } = body;
+        const timestamp = new Date().toISOString();
+
+        await sheets.spreadsheets.values.append({
+            spreadsheetId: SHEET_ID,
+            range: 'Analysis_History!A:E',
+            valueInputOption: 'USER_ENTERED',
+            requestBody: {
+                values: [[timestamp, jd, count, JSON.stringify(results || []), processedBy || 'N/A']]
+            }
+        });
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error("History Save Error:", error);
+        // [AUTO-CREATION] If sheet missing, create it
+        if (error.message.includes("Unable to parse range")) {
+            try {
+                await sheets.spreadsheets.batchUpdate({
+                    spreadsheetId: SHEET_ID,
+                    requestBody: {
+                        requests: [{ addSheet: { properties: { title: "Analysis_History" } } }]
+                    }
+                });
+                // Recursive retry (one time)
+                return await POST(req);
+            } catch (createErr) {
+                return NextResponse.json({ error: "Failed to create history sheet" }, { status: 500 });
+            }
         }
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
