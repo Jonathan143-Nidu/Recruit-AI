@@ -454,6 +454,51 @@ export default function MatchResultsPage() {
         }));
     };
 
+    const handleApplyAll = () => {
+        if (!bulkSendList || bulkSendList.length <= 1) return;
+        
+        // 1. Identify the 'template' from the current previewData.body
+        const currentBody = previewData.body;
+        
+        // Try to find the first closing paragraph tag (ReactQuill uses <p> for lines)
+        const pCloseIdx = currentBody.indexOf('</p>');
+        let templatePart = "";
+        if (pCloseIdx !== -1) {
+            templatePart = currentBody.substring(pCloseIdx + 4);
+        } else {
+            // Fallback for non-HTML/simple text
+            const firstNewline = currentBody.indexOf('\n');
+            if (firstNewline !== -1) {
+                templatePart = currentBody.substring(firstNewline);
+            } else {
+                templatePart = currentBody; 
+            }
+        }
+
+        // 2. Apply this template to all items in the list
+        const updatedList = bulkSendList.map((item, idx) => {
+            // Preservation logic: Keep the greeting of the target candidate
+            const targetGreeting = item.body.indexOf('</p>') !== -1 
+                ? item.body.substring(0, item.body.indexOf('</p>') + 4)
+                : (item.body.split('\n')[0] || "");
+            
+            return {
+                ...item,
+                body: targetGreeting + templatePart
+            };
+        });
+
+        setBulkSendList(updatedList);
+        
+        // Update current preview too to reflect the change immediately
+        setPreviewData(prev => ({
+            ...prev,
+            body: updatedList[currentBulkIndex].body
+        }));
+
+        alert(`✅ Template applied to all ${updatedList.length} candidates! Headers (Greetings) were preserved.`);
+    };
+
     // Helper: Detect Recipient Type
     const getRecipientInfo = (name, email) => {
         if (!email) return { type: 'Candidate', name: name || 'Candidate' };
@@ -1728,6 +1773,30 @@ Innovcentric LLC`;
                                                     <span style={{ fontSize: '14px', fontWeight: '900' }}>▸</span>
                                                 </button>
                                             </div>
+                                        )}
+                                        {previewData.index === -1 && (
+                                            <button
+                                                onClick={handleApplyAll}
+                                                style={{
+                                                    padding: '6px 14px',
+                                                    borderRadius: '12px',
+                                                    background: '#6366f1',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    fontSize: '10px',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    boxShadow: '0 2px 4px rgba(99,102,241,0.2)',
+                                                    transition: 'all 0.2s',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px'
+                                                }}
+                                                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                                            >
+                                                <span>✨</span> Apply to All
+                                            </button>
                                         )}
                                     </div>
                                 </div>
