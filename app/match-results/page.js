@@ -62,7 +62,7 @@ export default function MatchResultsPage() {
     const [employmentType, setEmploymentType] = useState('');
     const [visa, setVisa] = useState('');
     const [jdLink, setJdLink] = useState('');
-    const careersLink = 'https://innovcentric.com/careers';
+    const careersLink = 'https://careers.innovcentric.com/jobs';
     const [sendingEmails, setSendingEmails] = useState({}); // Track row-level sending state
     const [isBulkSending, setIsBulkSending] = useState(false);
     const [selectedIndices, setSelectedIndices] = useState(new Set());
@@ -70,6 +70,7 @@ export default function MatchResultsPage() {
     const [showAdvancedSelect, setShowAdvancedSelect] = useState(false);
     const [matchThreshold, setMatchThreshold] = useState(0);
     const [gapThreshold, setGapThreshold] = useState(100);
+    const [showRecipientManager, setShowRecipientManager] = useState(false);
 
     // Email Preview Modal State
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -346,16 +347,51 @@ export default function MatchResultsPage() {
             console.log(`Auto-selected ${addedCount} more candidates.`);
         }
     };
-    // Helper: Consolidate Sender + Candidate emails & filter internal domain
+    // Helper: Consolidate Sender + Candidate emails & return structured list
+    // Helper: Consolidate Sender + Candidate emails & return structured list
+    const getRecipientList = (candidate) => {
+        const rawEmails = [];
+        if (candidate.Sender) rawEmails.push({ raw: candidate.Sender, type: 'Sender' });
+        if (candidate.Email) rawEmails.push({ raw: candidate.Email, type: 'Candidate' });
+
+        const seen = new Set();
+        const result = [];
+
+        rawEmails.forEach(item => {
+            const raw = item.raw.trim();
+            if (!raw || raw.toLowerCase().includes("@innovcentric.com")) return;
+
+            // Extract core email: "Name <email@domain.com>" -> "email@domain.com"
+            let email = raw;
+            const match = raw.match(/<(.+?)>/);
+            if (match && match[1]) {
+                email = match[1].trim();
+            }
+
+            // FILTER: Skip "Not found", "N/A", or empty
+            const lowerRaw = raw.toLowerCase();
+            if (lowerRaw.includes("not found") || lowerRaw.includes("n/a") || !email) return;
+
+            const lowerEmail = email.toLowerCase();
+
+            if (!seen.has(lowerEmail)) {
+                seen.add(lowerEmail);
+                result.push({
+                    email: email,      // Core email for sending
+                    display: raw,      // Full string for UI
+                    type: item.type,
+                    active: true
+                });
+            }
+        });
+
+        return result;
+    };
+
+
     const getValidEmails = (candidate) => {
-        const emails = [];
-        if (candidate.Sender) emails.push(candidate.Sender);
-        if (candidate.Email) emails.push(candidate.Email);
-        
-        return emails
-            .map(e => e.trim())
-            .filter(e => e !== "" && !e.toLowerCase().includes("@innovcentric.com"))
-            .filter((v, i, a) => a.indexOf(v) === i) // Unique
+        return getRecipientList(candidate)
+            .map(r => r.email)
             .join(", ");
     };
 
@@ -381,8 +417,9 @@ export default function MatchResultsPage() {
             cand.missingSkills?.forEach(s => gaps.push({ skill: typeof s === 'string' ? s : s.skill, req: typeof s === 'object' ? (s.jdRequirement || s.req || 'Required') : 'Required', has: 'Not Found', status: 'Missing' }));
             cand.missingCertifications?.forEach(cert => gaps.push({ skill: typeof cert === 'object' ? (cert.name || cert.skill || 'Certification') : cert, req: 'Must Have', has: 'Not Found', status: 'Missing' }));
 
+            const recipients = getRecipientList(cand);
             return {
-                to: getValidEmails(cand),
+                to: recipients, // Store structured list now
                 candidate: { 
                     displayName: recipient.name, 
                     gaps: gaps, 
@@ -392,7 +429,7 @@ export default function MatchResultsPage() {
                     partialMatchSkills: cand.partialMatchSkills || [],
                     matchPercentage: cand.matchPercentage || 0
                 },
-                body: `Hello ${recipient.name},\n\nWe've carefully reviewed your profile against our current opening. Based on our AI-driven "Forensic Analysis", here is your detailed match report.`,
+                body: `Hello ${recipient.name},<br/><br/>Thank you for sharing your resume.<br/><br/>Please provide your <strong>updated resume</strong> along with the <strong>required details and documents</strong> for further processing. Kindly review the <strong>job description</strong> for complete role details <a href="${jdLink || '#'}" style="color: #dc2626; font-weight: bold; text-decoration: none;">[Click for JD]</a>.<br/><br/>If you have relevant experience in the <strong>skills identified in the gap analysis</strong> that are not currently reflected in your resume, please update it to <strong>accurately represent your experience</strong>.`,
                 matchedSkills: cand.matchedSkills || [],
                 partialMatchSkills: cand.partialMatchSkills || [],
                 missingSkills: cand.missingSkills || []
@@ -416,8 +453,10 @@ export default function MatchResultsPage() {
             return;
         }
 
+        const activeEmails = firstBulkItem.to.filter(r => r.active).map(r => r.email).join(', ');
+
         setPreviewData({
-            to: firstBulkItem.to,
+            to: activeEmails,
             cc: '',
             subject: `${firstBulkItem.candidate.name}: ${jobTitle || 'New Opening'} - Match Report`,
             body: firstBulkItem.body,
@@ -444,10 +483,12 @@ export default function MatchResultsPage() {
         const nextItem = updatedList[nextIndex];
         setCurrentBulkIndex(nextIndex);
 
+        const activeEmails = nextItem.to.filter(r => r.active).map(r => r.email).join(', ');
+
         // Update preview content for the next candidate
         setPreviewData(prev => ({
             ...prev,
-            to: nextItem.to,
+            to: activeEmails,
             subject: `${nextItem.candidate.name}: ${jobTitle || 'New Opening'} - Match Report`,
             body: nextItem.body, // Use the stored (potentially edited) body
             candidate: { ...nextItem.candidate, requiredDetails: requiredDetails }
@@ -544,7 +585,7 @@ export default function MatchResultsPage() {
             to: toEmail,
             cc: ccEmail,
             subject: `${candidate.Name}: ${jobTitle || 'New Opening'} - Match Report`,
-            body: `Hello ${recipient.name},\n\nWe've carefully reviewed your profile against our current opening. Based on our AI-driven "Forensic Analysis", here is your detailed match report.`,
+            body: `Hello ${recipient.name},<br/><br/>Thank you for sharing your resume.<br/><br/>Please provide your <strong>updated resume</strong> along with the <strong>required details and documents</strong> for further processing. Kindly review the <strong>job description</strong> for complete role details <a href="${jdLink || '#'}" style="color: #dc2626; font-weight: bold; text-decoration: none;">[Click for JD]</a>.<br/><br/>If you have relevant experience in the <strong>skills identified in the gap analysis</strong> that are not currently reflected in your resume, please update it to <strong>accurately represent your experience</strong>.`,
             signature: '\n\nBest regards,\nRecruiting Team\nInnovcentric LLC',
             candidate: { 
                 displayName: recipient.name, 
@@ -580,8 +621,12 @@ export default function MatchResultsPage() {
             let successCount = 0;
             for (let i = 0; i < finalBulkList.length; i++) {
                 const item = finalBulkList[i];
+                const activeTo = item.to.filter(r => r.active).map(r => r.email).join(', ');
+                
+                if (!activeTo) continue; // Skip if no emails active for this candidate
+
                 // Find matching original index in results for status tracking
-                const candResultIndex = results.findIndex(r => r.Name === item.candidate.name && (r.Sender === item.to || r.Email === item.to));
+                const candResultIndex = results.findIndex(r => r.Name === item.candidate.name && (item.to.some(rt => rt.email === r.Sender || rt.email === r.Email)));
 
                 if (candResultIndex !== -1) {
                     setSendingEmails(prev => ({ ...prev, [candResultIndex]: 'sending' }));
@@ -592,7 +637,7 @@ export default function MatchResultsPage() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            to: item.to,
+                            to: activeTo,
                             cc: cc,
                             subject: `Match Report: ${jobTitle || 'New Opening'} - ${item.candidate.name}`,
                             customIntro: item.body, // Using the personalized (and potentially edited) body
@@ -785,6 +830,11 @@ Innovcentric LLC`;
                 body { margin: 0 !important; padding: 0 !important; overflow: hidden !important; }
                 /* Clean Corporate Animations */
                 @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+                @keyframes glowPulse {
+                    0% { box-shadow: 0 0 5px rgba(220, 38, 38, 0.4); transform: scale(1); }
+                    50% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.7); transform: scale(1.05); }
+                    100% { box-shadow: 0 0 5px rgba(220, 38, 38, 0.4); transform: scale(1); }
+                }
                 .animate-fade { animation: fadeInUp 0.4s ease-out forwards; }
 
                 /* Corporate Inputs */
@@ -1797,7 +1847,7 @@ Innovcentric LLC`;
                         zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
                     }}>
                         <div style={{
-                            backgroundColor: '#fff', width: '100%', maxWidth: '1100px', height: '85vh',
+                            backgroundColor: '#fff', width: '100%', maxWidth: '1200px', height: '92vh',
                             borderRadius: '24px', boxShadow: '0 30px 60px -12px rgba(0, 0, 0, 0.25)',
                             display: 'grid', gridTemplateColumns: '330px 1fr', position: 'relative', overflow: 'hidden',
                             animation: 'fadeInUp 0.3s ease-out', border: '1px solid rgba(255,255,255,0.2)'
@@ -1817,126 +1867,227 @@ Innovcentric LLC`;
                                 &times;
                             </button>
 
-                            {/* LEFT COLUMN: Premium Editor */}
-                            <div style={{ borderRight: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#ffffff' }}>
-                                <div style={{ padding: '25px 25px 15px 25px' }}>
+                            {/* LEFT COLUMN: Premium Editor Refactored to 3-Layer Grid */}
+                            <div style={{ 
+                                borderRight: '1px solid #f1f5f9', 
+                                display: 'grid', 
+                                gridTemplateRows: 'auto 1fr auto', 
+                                height: '100%', 
+                                background: '#ffffff', 
+                                position: 'relative', 
+                                zIndex: 10 
+                            }}>
+                                {/* 1. HEADER (Overflow Visible for Dropdown) */}
+                                <div style={{ padding: '12px 20px', background: '#ffffff', borderBottom: '1px solid #f1f5f9', zIndex: 20 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <div>
-                                            <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-                                                {previewData.index === -1 ? `Bulk Send` : 'Review & Send'}
-                                            </h2>
-                                            <p style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', fontWeight: '500' }}>Final polish before candidate delivery</p>
-                                        </div>
-                                        {previewData.index === -1 && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f8fafc', padding: '6px 12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                        <h2 style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span style={{ color: '#6366f1', fontSize: '14px' }}>⚡</span> 
+                                            Bulk Send
+                                        </h2>
+                                    </div>
+
+                                    {/* COMPACT TOOLBAR */}
+                                    {previewData.index === -1 && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', position: 'relative' }}>
+                                            {/* LEFT: Navigation Pill */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f8fafc', padding: '3px 8px', borderRadius: '10px', border: '1px solid #f1f5f9' }}>
                                                 <button
                                                     onClick={() => handleBulkNav(-1)}
                                                     disabled={currentBulkIndex === 0}
-                                                    style={{ border: 'none', background: 'none', cursor: currentBulkIndex === 0 ? 'not-allowed' : 'pointer', color: currentBulkIndex === 0 ? '#cbd5e1' : '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                    style={{ border: 'none', background: 'none', cursor: currentBulkIndex === 0 ? 'not-allowed' : 'pointer', color: currentBulkIndex === 0 ? '#cbd5e1' : '#6366f1', fontSize: '10px', padding: '0 2px', fontWeight: '800' }}
                                                 >
-                                                    <span style={{ fontSize: '14px', fontWeight: '900' }}>◂</span>
+                                                    ◂
                                                 </button>
-                                                <span style={{ fontSize: '12px', fontWeight: '800', color: '#334155', minWidth: '40px', textAlign: 'center' }}>
+                                                <span style={{ fontSize: '10px', fontWeight: '800', color: '#475569', minWidth: '30px', textAlign: 'center' }}>
                                                     {currentBulkIndex + 1} / {bulkSendList.length}
                                                 </span>
                                                 <button
                                                     onClick={() => handleBulkNav(1)}
                                                     disabled={currentBulkIndex === bulkSendList.length - 1}
-                                                    style={{ border: 'none', background: 'none', cursor: currentBulkIndex === bulkSendList.length - 1 ? 'not-allowed' : 'pointer', color: currentBulkIndex === bulkSendList.length - 1 ? '#cbd5e1' : '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                    style={{ border: 'none', background: 'none', cursor: currentBulkIndex === bulkSendList.length - 1 ? 'not-allowed' : 'pointer', color: currentBulkIndex === bulkSendList.length - 1 ? '#cbd5e1' : '#6366f1', fontSize: '10px', padding: '0 2px', fontWeight: '800' }}
                                                 >
-                                                    <span style={{ fontSize: '14px', fontWeight: '900' }}>▸</span>
+                                                    ▸
                                                 </button>
                                             </div>
-                                        )}
-                                        {previewData.index === -1 && (
+
+                                            {/* APPLY ALL BUTTON */}
                                             <button
                                                 onClick={handleApplyAll}
                                                 style={{
-                                                    padding: '6px 14px',
-                                                    borderRadius: '12px',
+                                                    padding: '4px 10px',
+                                                    borderRadius: '8px',
                                                     background: '#6366f1',
                                                     color: 'white',
                                                     border: 'none',
-                                                    fontSize: '10px',
+                                                    fontSize: '9px',
                                                     fontWeight: '800',
                                                     cursor: 'pointer',
-                                                    boxShadow: '0 2px 4px rgba(99,102,241,0.2)',
-                                                    transition: 'all 0.2s',
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    gap: '6px'
+                                                    gap: '4px',
+                                                    transition: 'all 0.2s'
                                                 }}
-                                                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                                                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                                                onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                                                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                                             >
-                                                <span>✨</span> Apply to All
+                                                <span>✨</span> Apply All
                                             </button>
-                                        )}
-                                    </div>
+
+                                            {/* EMAILS DROPDOWN */}
+                                            <div style={{ position: 'relative' }}>
+                                                <button
+                                                    onClick={() => setShowRecipientManager(!showRecipientManager)}
+                                                    style={{
+                                                        padding: '4px 10px', borderRadius: '8px', background: '#fff', border: '1px solid #e2e8f0',
+                                                        fontSize: '9px', fontWeight: '800', color: '#475569', cursor: 'pointer',
+                                                        display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.2s'
+                                                    }}
+                                                    onMouseEnter={e => e.currentTarget.style.borderColor = '#6366f1'}
+                                                    onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}
+                                                >
+                                                    <span>📬</span> Emails {showRecipientManager ? '▲' : '▼'}
+                                                </button>
+                                                
+                                                {showRecipientManager && (
+                                                    <div style={{
+                                                        position: 'absolute', top: '100%', left: 0, marginTop: '8px',
+                                                        width: '280px', maxHeight: '400px', background: '#ffffff', 
+                                                        borderRadius: '16px', boxShadow: '0 12px 40px rgba(0,0,0,0.12)',
+                                                        border: '1px solid #e2e8f0', zIndex: 9999, overflow: 'hidden',
+                                                        display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.2s ease-out'
+                                                    }}>
+                                                        <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <span style={{ fontSize: '11px', fontWeight: '800', color: '#0f172a', letterSpacing: '0.3px' }}>Emails Manager</span>
+                                                            <button style={{ color: '#6366f1', fontSize: '10px', fontWeight: '700', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', borderRadius: '4px' }} onMouseEnter={e => e.currentTarget.style.background = '#f5f3ff'} onMouseLeave={e => e.currentTarget.style.background = 'none'} onClick={() => {
+                                                                const newList = bulkSendList.map(item => ({
+                                                                    ...item,
+                                                                    to: item.to.map(r => ({ ...r, active: true }))
+                                                                }));
+                                                                setBulkSendList(newList);
+                                                                setPreviewData(prev => ({ ...prev, to: newList[currentBulkIndex].to.filter(r => r.active).map(rt => rt.email).join(', ') }));
+                                                            }}>Reset All</button>
+                                                        </div>
+                                                        <div style={{ overflowY: 'auto', padding: '4px 0' }}>
+                                                            {bulkSendList.map((item, candIdx) => (
+                                                                <div key={candIdx} style={{ padding: '6px 0', borderBottom: candIdx === bulkSendList.length - 1 ? 'none' : '1px solid #f8fafc' }}>
+                                                                    <div style={{ padding: '4px 16px', fontSize: '10px', fontWeight: '800', color: '#64748b', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                                                        <span style={{ color: candIdx === currentBulkIndex ? '#6366f1' : '#cbd5e1', fontSize: '9px' }}>{String(candIdx + 1).padStart(2, '0')}</span> 
+                                                                        <span style={{ color: '#334155' }}>{item.candidate.name}</span>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                        {item.to.map((rec, recIdx) => (
+                                                                            <label key={recIdx} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', padding: '8px 16px', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', marginTop: '2px' }}>
+                                                                                    <input 
+                                                                                        type="checkbox" 
+                                                                                        checked={rec.active}
+                                                                                        onChange={() => {
+                                                                                            const newList = [...bulkSendList];
+                                                                                            newList[candIdx].to[recIdx].active = !newList[candIdx].to[recIdx].active;
+                                                                                            setBulkSendList(newList);
+                                                                                            if (candIdx === currentBulkIndex) {
+                                                                                                const activeTo = newList[candIdx].to.filter(r => r.active).map(rt => rt.email).join(', ');
+                                                                                                setPreviewData(prev => ({ ...prev, to: activeTo }));
+                                                                                            }
+                                                                                        }}
+                                                                                        style={{ width: '14px', height: '14px', cursor: 'pointer', accentColor: '#6366f1' }}
+                                                                                    />
+                                                                                </div>
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                                                                                    <span style={{ fontSize: '11px', color: rec.active ? '#1e293b' : '#94a3b8', fontWeight: '600', textDecoration: rec.active ? 'none' : 'line-through', wordBreak: 'break-all', lineHeight: '1.4' }}>{rec.display}</span>
+                                                                                    <div style={{ display: 'flex', marginTop: '4px' }}>
+                                                                                        <span style={{ 
+                                                                                            fontSize: '7px', 
+                                                                                            fontWeight: '900', 
+                                                                                            color: rec.type === 'Sender' ? '#4f46e5' : '#ea580c', 
+                                                                                            textTransform: 'uppercase', 
+                                                                                            background: rec.type === 'Sender' ? '#f5f3ff' : '#fff7ed',
+                                                                                            padding: '2px 6px',
+                                                                                            borderRadius: '4px',
+                                                                                            border: `1px solid ${rec.type === 'Sender' ? '#e0e7ff' : '#ffedd5'}`,
+                                                                                            letterSpacing: '0.5px'
+                                                                                        }}>
+                                                                                            {rec.type}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </label>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div style={{ padding: '0 25px 20px 25px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
-                                            <label style={{ fontSize: '10px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>To</label>
-                                            <div style={{ fontSize: '12px', color: '#0f172a', fontWeight: '700', padding: '4px 0' }}>
+                                {/* 2. CONTENT (Scrollable Compact View) */}
+                                <div style={{ padding: '12px 18px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
+                                            <label style={{ width: '50px', fontSize: '9px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px' }}>To</label>
+                                            <div style={{ flex: 1, fontSize: '11px', color: '#0f172a', fontWeight: '700' }}>
                                                 {previewData.index === -1 ? (
-                                                    <span style={{ color: '#6366f1' }}>
-                                                        📬 Individual Preview for {previewData.to}
+                                                    <span style={{ color: '#6366f1', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <span style={{ fontSize: '12px' }}>📬</span> {previewData.to.split('<')[0].trim()}
                                                     </span>
                                                 ) : (
                                                     <input
                                                         type="text"
                                                         value={previewData.to}
                                                         onChange={(e) => setPreviewData({ ...previewData, to: e.target.value })}
-                                                        style={{ border: 'none', outline: 'none', width: '100%', background: 'transparent' }}
+                                                        style={{ border: 'none', outline: 'none', width: '100%', background: 'transparent', fontWeight: '700' }}
                                                     />
                                                 )}
                                             </div>
                                         </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
-                                            <label style={{ fontSize: '10px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>CC</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
+                                            <label style={{ width: '50px', fontSize: '9px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px' }}>CC</label>
                                             <input
                                                 type="text"
                                                 value={previewData.cc}
                                                 onChange={(e) => setPreviewData({ ...previewData, cc: e.target.value })}
                                                 placeholder="Add CC email..."
-                                                style={{ border: 'none', outline: 'none', fontSize: '13px', color: '#0f172a', padding: '4px 0' }}
+                                                style={{ border: 'none', outline: 'none', fontSize: '11px', color: '#1e293b', flex: 1, background: 'transparent' }}
                                             />
                                         </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
-                                            <label style={{ fontSize: '10px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>Subject</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
+                                            <label style={{ width: '50px', fontSize: '9px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Sub</label>
                                             <input
                                                 type="text"
                                                 value={previewData.subject}
                                                 onChange={(e) => setPreviewData({ ...previewData, subject: e.target.value })}
-                                                style={{ border: 'none', outline: 'none', fontSize: '13px', color: '#0f172a', fontWeight: '600', padding: '4px 0' }}
+                                                style={{ border: 'none', outline: 'none', fontSize: '11px', color: '#0f172a', fontWeight: '700', flex: 1, background: 'transparent' }}
                                             />
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                         <div>
-                                            <label style={{ fontSize: '10px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>Personalized Message</label>
-                                            <div style={{ background: 'white', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                                            <label style={{ fontSize: '9px', fontWeight: '900', color: '#6366f1', textTransform: 'uppercase', marginBottom: '6px', display: 'block', letterSpacing: '0.5px' }}>Personalized Message</label>
+                                            <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
                                                 <ReactQuill
                                                     theme="snow"
                                                     value={previewData.body}
                                                     onChange={(content, delta, source) => { if (source === 'user') setPreviewData({ ...previewData, body: content }) }}
-                                                    style={{ height: '140px', marginBottom: '40px' }}
+                                                    style={{ height: '150px', marginBottom: '34px' }}
                                                     modules={BODY_MODULES}
                                                 />
                                             </div>
                                         </div>
 
                                         <div>
-                                            <label style={{ fontSize: '10px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>Signature</label>
-                                            <div style={{ background: 'white', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                                            <label style={{ fontSize: '9px', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '6px', display: 'block', letterSpacing: '0.5px' }}>Signature</label>
+                                            <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
                                                 <ReactQuill
                                                     theme="snow"
                                                     value={previewData.signature}
                                                     onChange={(content, delta, source) => { if (source === 'user') setPreviewData({ ...previewData, signature: content }) }}
-                                                    style={{ height: '70px', marginBottom: '40px' }}
+                                                    style={{ height: '55px', marginBottom: '34px' }}
                                                     modules={SIGNATURE_MODULES}
                                                 />
                                             </div>
@@ -1944,21 +2095,24 @@ Innovcentric LLC`;
                                     </div>
                                 </div>
 
-                                <div style={{ padding: '20px 25px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', gap: '10px' }}>
+                                {/* 3. FOOTER (Fixed Bottom Compact) */}
+                                <div style={{ padding: '12px 18px', borderTop: '1px solid #f1f5f9', background: '#ffffff', display: 'flex', gap: '10px', zIndex: 10 }}>
                                     <button
                                         onClick={() => setIsPreviewOpen(false)}
-                                        style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: '700', cursor: 'pointer', fontSize: '12px' }}
+                                        style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: '700', cursor: 'pointer', fontSize: '11px' }}
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         onClick={confirmSendEmail}
-                                        style={{ flex: 2, padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '12px', boxShadow: '0 4px 12px rgba(99,102,241,0.2)' }}
+                                        style={{ flex: 2, padding: '10px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#fff', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '11px', boxShadow: '0 4px 10px rgba(99,102,241,0.2)' }}
                                     >
-                                        <span>🚀</span> {previewData.index === -1 ? `Send to ${selectedIndices.size} Candidates` : 'Send Analysis'}
+                                        🚀 {previewData.index === -1 ? `Send (${selectedIndices.size})` : 'Send Analysis'}
                                     </button>
                                 </div>
                             </div>
+
+
 
                             {/* RIGHT COLUMN: Live Layout Preview */}
                             <div style={{ background: '#ffffff', padding: '0', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -1973,48 +2127,62 @@ Innovcentric LLC`;
                                         </div>
                                         <div style={{ height: '1px', background: '#f1f5f9', marginTop: '15px', marginBottom: '15px' }}></div>
 
-                                        {/* New horizontal Job Essentials Banner */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 0.7fr 0.6fr 1fr 0.6fr 0.5fr 0.6fr', gap: '10px', padding: '0 5px' }}>
-                                            <div>
-                                                <div style={{ fontSize: '8px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', marginBottom: '2px' }}>Role</div>
-                                                <div style={{ fontSize: '11px', fontWeight: '700', color: '#1e293b', lineHeight: '1.2' }}>{previewData.jobInfo?.title || 'Not specified'}</div>
+                                        {/* Title Bar Banner */}
+                                        <div style={{ padding: '0 10px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #e2e8f0', paddingBottom: '12px', marginBottom: '12px' }}>
+                                                <div style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', lineHeight: '1.2' }}>
+                                                    {previewData.jobInfo?.title || 'Not specified'}
+                                                </div>
+                                                <span style={{ fontSize: '9px', fontWeight: '900', color: '#fff', background: '#dc2626', padding: '6px 16px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', boxShadow: '0 0 15px rgba(220, 38, 38, 0.5)', animation: 'glowPulse 2s infinite ease-in-out', border: '1px solid rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'all 0.2s' }} onClick={() => window.open(previewData.jobInfo?.jdLink || '#', '_blank')} onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.2)'} onMouseLeave={e => e.currentTarget.style.filter = 'brightness(1)'}>Click for JD</span>
                                             </div>
-                                            <div>
-                                                <div style={{ fontSize: '8px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', marginBottom: '2px' }}>Location</div>
-                                                <div style={{ fontSize: '11px', fontWeight: '700', color: '#1e293b' }}>{previewData.jobInfo?.location || '---'}</div>
-                                            </div>
-                                            <div>
-                                                <div style={{ fontSize: '8px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', marginBottom: '2px' }}>Rate</div>
-                                                <div style={{ fontSize: '11px', fontWeight: '700', color: '#1e293b' }}>{previewData.jobInfo?.rate || '---'}</div>
-                                            </div>
-                                            <div>
-                                                <div style={{ fontSize: '8px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', marginBottom: '2px' }}>Visa</div>
-                                                <div style={{ fontSize: '11px', fontWeight: '700', color: '#1e293b' }}>{previewData.jobInfo?.visa || '---'}</div>
-                                            </div>
-                                            <div>
-                                                <div style={{ fontSize: '8px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', marginBottom: '2px' }}>Client</div>
-                                                <div style={{ fontSize: '11px', fontWeight: '700', color: '#1e293b' }}>{previewData.jobInfo?.client || '---'}</div>
-                                            </div>
-                                            <div>
-                                                <div style={{ fontSize: '8px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', marginBottom: '2px' }}>Mode</div>
-                                                <div style={{ fontSize: '11px', fontWeight: '700', color: '#1e293b' }}>{previewData.jobInfo?.mode || '---'}</div>
-                                            </div>
-                                            <div>
-                                                <div style={{ fontSize: '8px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', marginBottom: '2px' }}>Exp</div>
-                                                <div style={{ fontSize: '11px', fontWeight: '700', color: '#1e293b' }}>{previewData.jobInfo?.exp || '---'}</div>
-                                            </div>
-                                            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                                <span style={{ fontSize: '9px', fontWeight: '800', color: '#6366f1', cursor: 'pointer' }}>Full JD →</span>
+                                            
+                                            <div style={{ fontSize: '11px', color: '#475569', fontWeight: '700', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                                                <span style={{ color: '#94a3b8', fontWeight: '800', fontSize: '9px' }}>LOCATION:</span> <span style={{ color: '#1e293b' }}>{previewData.jobInfo?.location || '---'}</span> <span style={{ color: '#cbd5e1' }}>|</span>
+                                                <span style={{ color: '#94a3b8', fontWeight: '800', fontSize: '9px' }}>RATE:</span> <span style={{ color: '#1e293b' }}>{previewData.jobInfo?.rate || '---'}</span> <span style={{ color: '#cbd5e1' }}>|</span>
+                                                <span style={{ color: '#94a3b8', fontWeight: '800', fontSize: '9px' }}>VISA:</span> <span style={{ color: '#1e293b' }}>{previewData.jobInfo?.visa || '---'}</span> <span style={{ color: '#cbd5e1' }}>|</span>
+                                                <span style={{ color: '#94a3b8', fontWeight: '800', fontSize: '9px' }}>CLIENT:</span> <span style={{ color: '#1e293b' }}>{previewData.jobInfo?.client || '---'}</span> <span style={{ color: '#cbd5e1' }}>|</span>
+                                                <span style={{ color: '#94a3b8', fontWeight: '800', fontSize: '9px' }}>MODE:</span> <span style={{ color: '#1e293b' }}>{previewData.jobInfo?.mode || '---'}</span> <span style={{ color: '#cbd5e1' }}>|</span>
+                                                <span style={{ color: '#94a3b8', fontWeight: '800', fontSize: '9px' }}>EXP:</span> <span style={{ color: '#1e293b' }}>{previewData.jobInfo?.exp || '---'}</span>
                                             </div>
                                         </div>
                                         <div style={{ height: '1px', background: '#f1f5f9', marginTop: '15px' }}></div>
                                     </div>
 
-                                    {/* Fake Email Content - Mirroring API Output */}
-                                    <div style={{ display: 'flex', flex: 1, padding: '0', background: '#ffffff', overflowY: 'auto' }}>
-                                        {/* Main Body */}
-                                        <div style={{ flex: '0 0 70%', padding: '15px 25px', borderRight: '1px solid #f1f5f9' }}>
-                                            <div style={{ fontSize: '12px', color: '#334155', whiteSpace: 'pre-wrap', marginBottom: '15px', lineHeight: '1.5' }} dangerouslySetInnerHTML={{ __html: previewData.body }} />
+                                    {/* Fake Email Content - Rigid Grid 70/30 Refactor */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '70% 30%', flex: 1, padding: '0', background: '#ffffff', overflowY: 'auto', minWidth: 0 }}>
+                                        {/* 70% Body Column (Rigid Grid Child) */}
+                                        <div style={{ 
+                                            padding: '15px 25px', 
+                                            borderRight: '1px solid #f1f5f9', 
+                                            boxSizing: 'border-box', 
+                                            minWidth: 0,
+                                            overflow: 'hidden' // Strictly contain all text
+                                        }}>
+                                            {/* Preview Renderer: High-Density & Matched Typography */}
+                                            <div 
+                                                className="preview-content"
+                                                style={{ 
+                                                    fontSize: '12px', 
+                                                    fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+                                                    color: '#334155', 
+                                                    lineHeight: '1.6', 
+                                                    textAlign: 'left',
+                                                    marginBottom: '20px',
+                                                    overflowWrap: 'break-word', // natural wrapping
+                                                    wordBreak: 'normal',
+                                                    whiteSpace: 'normal' // Rely on HTML tags for newlines
+                                                }} 
+                                                dangerouslySetInnerHTML={{ __html: previewData.body }} 
+                                            />
+
+                                            {/* Injected style to match Quill paragraphs exactly (Zero margin) */}
+                                            <style>
+                                                {`
+                                                    .preview-content p { margin: 0; padding: 0; min-height: 1em; }
+                                                    .preview-content ul, .preview-content ol { padding-left: 20px; margin: 0 0 10px 0; }
+                                                    .preview-content li { margin-bottom: 4px; }
+                                                `}
+                                            </style>
 
                                             <div style={{ fontSize: '10px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>Gap Analysis</div>
 
@@ -2100,7 +2268,7 @@ Innovcentric LLC`;
                                                 </div>
                                             </div>
 
-                                            <div style={{ display: 'inline-block', padding: '6px 12px', background: '#6366f1', color: '#fff', borderRadius: '4px', fontSize: '10px', fontWeight: '700', cursor: 'pointer' }}>View More Jobs</div>
+                                            <div style={{ display: 'inline-block', padding: '8px 18px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#fff', borderRadius: '10px', fontSize: '12px', fontWeight: '900', cursor: 'pointer', boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)', transition: 'all 0.3s' }} onClick={() => window.open(careersLink, '_blank')} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(99, 102, 241, 0.4)'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(99, 102, 241, 0.3)'; }}>View More Jobs</div>
 
                                             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '25px', borderTop: '1px solid #f1f5f9', paddingTop: '15px', whiteSpace: 'pre-wrap' }} dangerouslySetInnerHTML={{ __html: previewData.signature }} />
                                         </div>

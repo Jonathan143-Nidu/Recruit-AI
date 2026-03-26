@@ -82,38 +82,26 @@ export async function POST(req) {
 <body>
     <div class="container">
         <div class="job-header">
-            <div class="job-header-grid">
-                <div class="job-header-col" style="width: 20%; padding-left: 0;">
-                    <span class="job-header-label">Role</span>
-                    <span class="job-header-value">${jobInfo?.title || 'Not specified'}</span>
-                </div>
-                <div class="job-header-col" style="width: 12%;">
-                    <span class="job-header-label">Location</span>
-                    <span class="job-header-value">${jobInfo?.location || '---'}</span>
-                </div>
-                <div class="job-header-col" style="width: 12%;">
-                    <span class="job-header-label">Rate</span>
-                    <span class="job-header-value">${jobInfo?.rate || '---'}</span>
-                </div>
-                <div class="job-header-col" style="width: 8%;">
-                    <span class="job-header-label">Visa</span>
-                    <span class="job-header-value">${jobInfo?.visa || '---'}</span>
-                </div>
-                <div class="job-header-col" style="width: 15%;">
-                    <span class="job-header-label">Client</span>
-                    <span class="job-header-value">${jobInfo?.client || '---'}</span>
-                </div>
-                <div class="job-header-col" style="width: 10%;">
-                    <span class="job-header-label">Mode</span>
-                    <span class="job-header-value">${jobInfo?.mode || '---'}</span>
-                </div>
-                <div class="job-header-col" style="width: 8%;">
-                    <span class="job-header-label">Exp</span>
-                    <span class="job-header-value">${jobInfo?.exp || '---'}</span>
-                </div>
-                <div class="job-header-col" style="width: 15%; padding-right: 0; text-align: right; vertical-align: middle;">
-                    <a href="${jobInfo?.jdLink || '#'}" style="color:#6366f1; font-size:10px; font-weight:800; text-decoration: none; white-space: nowrap;">Full JD →</a>
-                </div>
+            <table style="width: 100%; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 12px; border-collapse: collapse;">
+                <tr>
+                    <td style="vertical-align: middle;">
+                        <span style="font-size: 16px; font-weight: 800; color: #0f172a; line-height: 1.2;">
+                            ${jobInfo?.title || 'Not specified'}
+                        </span>
+                    </td>
+                    <td style="text-align: right; vertical-align: middle; width: 140px;">
+                        <a href="${jobInfo?.jdLink || '#'}" style="display: inline-block; background-color: #dc2626; color: #ffffff !important; padding: 6px 16px; border-radius: 6px; font-size: 10px; font-weight: 800; text-decoration: none; text-transform: uppercase;">Click for JD</a>
+                    </td>
+                </tr>
+            </table>
+            
+            <div style="font-size: 11px; color: #475569; font-weight: 700;">
+                <span style="color: #94a3b8; font-weight: 800; font-size: 9px;">LOCATION:</span> <span style="color: #1e293b;">${jobInfo?.location || '---'}</span> &nbsp;|&nbsp;
+                <span style="color: #94a3b8; font-weight: 800; font-size: 9px;">RATE:</span> <span style="color: #1e293b;">${jobInfo?.rate || '---'}</span> &nbsp;|&nbsp;
+                <span style="color: #94a3b8; font-weight: 800; font-size: 9px;">VISA:</span> <span style="color: #1e293b;">${jobInfo?.visa || '---'}</span> &nbsp;|&nbsp;
+                <span style="color: #94a3b8; font-weight: 800; font-size: 9px;">CLIENT:</span> <span style="color: #1e293b;">${jobInfo?.client || '---'}</span> &nbsp;|&nbsp;
+                <span style="color: #94a3b8; font-weight: 800; font-size: 9px;">MODE:</span> <span style="color: #1e293b;">${jobInfo?.mode || '---'}</span> &nbsp;|&nbsp;
+                <span style="color: #94a3b8; font-weight: 800; font-size: 9px;">EXP:</span> <span style="color: #1e293b;">${jobInfo?.exp || '---'}</span>
             </div>
         </div>
         <div class="main-layout">
@@ -193,7 +181,7 @@ export async function POST(req) {
                     <div class="summary-gap">Missing skills ${100 - (candidate?.matchPercentage || 0)}%</div>
                 </div>
                 
-                <a href="${careersLink || 'https://innovcentric.com/careers'}" class="button">View More Jobs</a>
+                <a href="${careersLink || 'https://careers.innovcentric.com/jobs'}" class="button">View More Jobs</a>
 
                 <div class="signature">${signature || `Best regards,<br/>${senderName}<br/>Innovcentric LLC`}</div>
             </div>
@@ -202,8 +190,8 @@ export async function POST(req) {
                 ${candidate?.requiredDetails ? `
                     <div style="margin-top:25px;">
                         <div class="section-title">Required Details</div>
-                        <div style="font-size:12px; color:#1e293b; line-height:1.5; white-space:pre-wrap; font-weight:700;">
-                            ${candidate.requiredDetails.replace(/\n/g, '<br/>')}
+                        <div style="font-size:12px; color:#1e293b; line-height:1.4; font-weight:700;">
+${candidate.requiredDetails.trim().replace(/\n/g, '<br/>')}
                         </div>
                     </div>
                 ` : ''}
