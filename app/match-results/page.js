@@ -12,19 +12,17 @@ const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
 
 const BODY_MODULES = {
     toolbar: [
-        [{ 'header': [1, 2, 3, false] }],
         ['bold', 'italic', 'underline', 'strike'],
         [{ 'color': [] }, { 'background': [] }],
-        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-        ['link'],
-        ['clean']
+        ['link', 'clean']
     ]
 };
 
 const SIGNATURE_MODULES = {
     toolbar: [
-        ['bold', 'italic', 'underline', 'link'],
-        [{ 'color': [] }]
+        ['bold', 'italic', 'underline', 'strike'],
+        [{ 'color': [] }, { 'background': [] }],
+        ['link', 'clean']
     ]
 };
 
@@ -62,6 +60,7 @@ export default function MatchResultsPage() {
     const [employmentType, setEmploymentType] = useState('');
     const [visa, setVisa] = useState('');
     const [jdLink, setJdLink] = useState('');
+    const [emailBodyTemplate, setEmailBodyTemplate] = useState('');
     const careersLink = 'https://careers.innovcentric.com/jobs';
     const [sendingEmails, setSendingEmails] = useState({}); // Track row-level sending state
     const [isBulkSending, setIsBulkSending] = useState(false);
@@ -429,7 +428,7 @@ export default function MatchResultsPage() {
                     partialMatchSkills: cand.partialMatchSkills || [],
                     matchPercentage: cand.matchPercentage || 0
                 },
-                body: `Hello ${recipient.name},<br/><br/>Thank you for sharing your resume.<br/><br/>Please provide your <strong>updated resume</strong> along with the <strong>required details and documents</strong> for further processing. Kindly review the <strong>job description</strong> for complete role details <a href="${jdLink || '#'}" style="color: #dc2626; font-weight: bold; text-decoration: none;">[Click for JD]</a>.<br/><br/>If you have relevant experience in the <strong>skills identified in the gap analysis</strong> that are not currently reflected in your resume, please update it to <strong>accurately represent your experience</strong>.`,
+                body: `Hello ${recipient.name},<br/><br/>${emailBodyTemplate.replace(/\n/g, '<br/>')}`,
                 matchedSkills: cand.matchedSkills || [],
                 partialMatchSkills: cand.partialMatchSkills || [],
                 missingSkills: cand.missingSkills || []
@@ -498,46 +497,46 @@ export default function MatchResultsPage() {
     const handleApplyAll = () => {
         if (!bulkSendList || bulkSendList.length <= 1) return;
         
-        // 1. Identify the 'template' from the current previewData.body
+        // 1. Capture the source body from current state (includes most recent edits)
         const currentBody = previewData.body;
         
-        // Try to find the first closing paragraph tag (ReactQuill uses <p> for lines)
+        // 2. Safely extract core template (everything after first paragraph or line)
+        let templateContent = "";
         const pCloseIdx = currentBody.indexOf('</p>');
-        let templatePart = "";
         if (pCloseIdx !== -1) {
-            templatePart = currentBody.substring(pCloseIdx + 4);
+            templateContent = currentBody.substring(pCloseIdx + 4);
         } else {
-            // Fallback for non-HTML/simple text
             const firstNewline = currentBody.indexOf('\n');
-            if (firstNewline !== -1) {
-                templatePart = currentBody.substring(firstNewline);
-            } else {
-                templatePart = currentBody; 
-            }
+            templateContent = firstNewline !== -1 ? currentBody.substring(firstNewline + 1) : "";
         }
 
-        // 2. Apply this template to all items in the list
+        // 3. Map to all candidates
         const updatedList = bulkSendList.map((item, idx) => {
-            // Preservation logic: Keep the greeting of the target candidate
-            const targetGreeting = item.body.indexOf('</p>') !== -1 
-                ? item.body.substring(0, item.body.indexOf('</p>') + 4)
-                : (item.body.split('\n')[0] || "");
+            // Preservation logic: Keep the unique greeting of EACH target candidate
+            let targetGreeting = "";
+            const targetPClose = item.body.indexOf('</p>');
+            if (targetPClose !== -1) {
+                targetGreeting = item.body.substring(0, targetPClose + 4);
+            } else {
+                const targetNewline = item.body.indexOf('\n');
+                targetGreeting = targetNewline !== -1 ? item.body.substring(0, targetNewline + 1) : item.body;
+            }
             
+            // Special Case: IF we are updating the current candidate, just use currentBody to avoid desync
+            if (idx === currentBulkIndex) {
+               return { ...item, body: currentBody };
+            }
+
             return {
                 ...item,
-                body: targetGreeting + templatePart
+                body: targetGreeting + templateContent
             };
         });
 
+        // 4. Update state
         setBulkSendList(updatedList);
         
-        // Update current preview too to reflect the change immediately
-        setPreviewData(prev => ({
-            ...prev,
-            body: updatedList[currentBulkIndex].body
-        }));
-
-        alert(`✅ Template applied to all ${updatedList.length} candidates! Headers (Greetings) were preserved.`);
+        alert(`✅ Template applied to all ${updatedList.length} candidates! Greetings were preserved.`);
     };
 
     // Helper: Detect Recipient Type
@@ -585,7 +584,7 @@ export default function MatchResultsPage() {
             to: toEmail,
             cc: ccEmail,
             subject: `${candidate.Name}: ${jobTitle || 'New Opening'} - Match Report`,
-            body: `Hello ${recipient.name},<br/><br/>Thank you for sharing your resume.<br/><br/>Please provide your <strong>updated resume</strong> along with the <strong>required details and documents</strong> for further processing. Kindly review the <strong>job description</strong> for complete role details <a href="${jdLink || '#'}" style="color: #dc2626; font-weight: bold; text-decoration: none;">[Click for JD]</a>.<br/><br/>If you have relevant experience in the <strong>skills identified in the gap analysis</strong> that are not currently reflected in your resume, please update it to <strong>accurately represent your experience</strong>.`,
+            body: `Hello ${recipient.name},<br/><br/>${emailBodyTemplate.replace(/\n/g, '<br/>')}`,
             signature: '\n\nBest regards,\nRecruiting Team\nInnovcentric LLC',
             candidate: { 
                 displayName: recipient.name, 
@@ -1187,6 +1186,22 @@ Innovcentric LLC`;
                                     placeholder="e.g. Visa Copy, Resume..."
                                     className="corp-input"
                                     style={{ width: '100%', height: '80px', padding: '6px 10px', border: '1px solid #e2e8f0', lineHeight: '1.4', fontSize: '11px' }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Section 5: Email Template (Always Visible) */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ flexShrink: 0 }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700', marginBottom: '2px', fontSize: '9px', color: '#64748b', textTransform: 'uppercase' }}>
+                                    <span>✉️</span> Default Message
+                                </label>
+                                <textarea
+                                    value={emailBodyTemplate}
+                                    onChange={(e) => setEmailBodyTemplate(e.target.value)}
+                                    placeholder="This will be used as the starting message in your emails..."
+                                    className="corp-input"
+                                    style={{ width: '100%', height: '100px', padding: '6px 10px', border: '1px solid #e2e8f0', lineHeight: '1.4', fontSize: '11px' }}
                                 />
                             </div>
                         </div>
@@ -1875,14 +1890,15 @@ Innovcentric LLC`;
                                 height: '100%', 
                                 background: '#ffffff', 
                                 position: 'relative', 
-                                zIndex: 10 
+                                zIndex: 10,
+                                minHeight: 0 // Force grid items to obey parent height
                             }}>
                                 {/* 1. HEADER (Overflow Visible for Dropdown) */}
                                 <div style={{ padding: '12px 20px', background: '#ffffff', borderBottom: '1px solid #f1f5f9', zIndex: 20 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <h2 style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <span style={{ color: '#6366f1', fontSize: '14px' }}>⚡</span> 
-                                            Bulk Send
+                                            {previewData.index === -1 ? 'Bulk Send' : 'Send Analysis'}
                                         </h2>
                                     </div>
 
@@ -2026,10 +2042,17 @@ Innovcentric LLC`;
                                 </div>
 
                                 {/* 2. CONTENT (Scrollable Compact View) */}
-                                <div style={{ padding: '12px 18px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
-                                            <label style={{ width: '50px', fontSize: '9px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px' }}>To</label>
+                                <div style={{ 
+                                    padding: '12px 18px', 
+                                    overflowY: 'auto', 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    gap: '12px',
+                                    minHeight: 0 // Crucial for grid scrolling
+                                }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '6px 0' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1.5px solid #f1f5f9', padding: '4px 0' }}>
+                                            <label style={{ width: '50px', fontSize: '9px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px' }}>To</label>
                                             <div style={{ flex: 1, fontSize: '11px', color: '#0f172a', fontWeight: '700' }}>
                                                 {previewData.index === -1 ? (
                                                     <span style={{ color: '#6366f1', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -2040,54 +2063,112 @@ Innovcentric LLC`;
                                                         type="text"
                                                         value={previewData.to}
                                                         onChange={(e) => setPreviewData({ ...previewData, to: e.target.value })}
-                                                        style={{ border: 'none', outline: 'none', width: '100%', background: 'transparent', fontWeight: '700' }}
+                                                        style={{ border: 'none', outline: 'none', width: '100%', background: 'transparent', fontWeight: '700', padding: '0 4px' }}
                                                     />
                                                 )}
                                             </div>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
-                                            <label style={{ width: '50px', fontSize: '9px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px' }}>CC</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1.5px solid #f1f5f9', padding: '4px 0' }}>
+                                            <label style={{ width: '50px', fontSize: '9px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px' }}>CC</label>
                                             <input
                                                 type="text"
                                                 value={previewData.cc}
                                                 onChange={(e) => setPreviewData({ ...previewData, cc: e.target.value })}
                                                 placeholder="Add CC email..."
-                                                style={{ border: 'none', outline: 'none', fontSize: '11px', color: '#1e293b', flex: 1, background: 'transparent' }}
+                                                style={{ border: 'none', outline: 'none', fontSize: '11px', color: '#1e293b', flex: 1, background: 'transparent', padding: '0 4px' }}
                                             />
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
-                                            <label style={{ width: '50px', fontSize: '9px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Sub</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1.5px solid #f1f5f9', padding: '4px 0' }}>
+                                            <label style={{ width: '50px', fontSize: '9px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Sub</label>
                                             <input
                                                 type="text"
                                                 value={previewData.subject}
                                                 onChange={(e) => setPreviewData({ ...previewData, subject: e.target.value })}
-                                                style={{ border: 'none', outline: 'none', fontSize: '11px', color: '#0f172a', fontWeight: '700', flex: 1, background: 'transparent' }}
+                                                style={{ border: 'none', outline: 'none', fontSize: '11px', color: '#0f172a', fontWeight: '700', flex: 1, background: 'transparent' , padding: '0 4px'}}
                                             />
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                        <style>
+                                            {`
+                                                .modal-quill .ql-toolbar.ql-snow {
+                                                    border: 1px solid #e2e8f0;
+                                                    border-radius: 12px 12px 0 0;
+                                                    background: #f8fafc;
+                                                    padding: 6px 12px;
+                                                    display: flex;
+                                                    align-items: center;
+                                                    flex-wrap: wrap;
+                                                    gap: 4px;
+                                                }
+                                                /* Scale down buttons and icons */
+                                                .modal-quill .ql-toolbar.ql-snow button {
+                                                    width: 24px;
+                                                    height: 24px;
+                                                    padding: 3px;
+                                                }
+                                                .modal-quill .ql-toolbar.ql-snow svg {
+                                                    width: 14px;
+                                                    height: 14px;
+                                                }
+                                                /* Scale down pickers (like Header/Font) */
+                                                .modal-quill .ql-toolbar.ql-snow .ql-picker {
+                                                    height: 24px;
+                                                    font-size: 11px;
+                                                }
+                                                .modal-quill .ql-toolbar.ql-snow .ql-picker-label {
+                                                    padding: 0 4px;
+                                                    display: flex;
+                                                    align-items: center;
+                                                }
+                                                
+                                                .modal-quill .ql-container.ql-snow {
+                                                    border: 1px solid #e2e8f0;
+                                                    border-top: none;
+                                                    border-radius: 0 0 12px 12px;
+                                                    font-family: inherit;
+                                                    overflow: hidden;
+                                                    display: flex;
+                                                    flex-direction: column;
+                                                }
+                                                .modal-quill .ql-editor {
+                                                    flex: 1;
+                                                    overflow-y: auto;
+                                                    font-size: 13px;
+                                                    color: #334155;
+                                                    padding: 10px;
+                                                }
+                                                .modal-quill .ql-editor::-webkit-scrollbar {
+                                                    width: 4px;
+                                                }
+                                                .modal-quill .ql-editor::-webkit-scrollbar-thumb {
+                                                    background: #cbd5e1;
+                                                    border-radius: 10px;
+                                                }
+                                            `}
+                                        </style>
                                         <div>
-                                            <label style={{ fontSize: '9px', fontWeight: '900', color: '#6366f1', textTransform: 'uppercase', marginBottom: '6px', display: 'block', letterSpacing: '0.5px' }}>Personalized Message</label>
-                                            <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                                            <label style={{ fontSize: '9px', fontWeight: '900', color: '#6366f1', textTransform: 'uppercase', marginBottom: '6px', display: 'block', letterSpacing: '0.6px' }}>Personalized Message</label>
+                                            <div className="modal-quill">
                                                 <ReactQuill
                                                     theme="snow"
                                                     value={previewData.body}
                                                     onChange={(content, delta, source) => { if (source === 'user') setPreviewData({ ...previewData, body: content }) }}
-                                                    style={{ height: '150px', marginBottom: '34px' }}
+                                                    style={{ height: '200px', marginBottom: '40px' }}
                                                     modules={BODY_MODULES}
                                                 />
                                             </div>
                                         </div>
 
-                                        <div>
-                                            <label style={{ fontSize: '9px', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '6px', display: 'block', letterSpacing: '0.5px' }}>Signature</label>
-                                            <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ marginTop: '5px' }}>
+                                            <label style={{ fontSize: '9px', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '6px', display: 'block', letterSpacing: '0.6px' }}>Signature</label>
+                                            <div className="modal-quill">
                                                 <ReactQuill
                                                     theme="snow"
                                                     value={previewData.signature}
                                                     onChange={(content, delta, source) => { if (source === 'user') setPreviewData({ ...previewData, signature: content }) }}
-                                                    style={{ height: '55px', marginBottom: '34px' }}
+                                                    style={{ height: '120px', marginBottom: '40px' }}
                                                     modules={SIGNATURE_MODULES}
                                                 />
                                             </div>
@@ -2181,6 +2262,7 @@ Innovcentric LLC`;
                                                     .preview-content p { margin: 0; padding: 0; min-height: 1em; }
                                                     .preview-content ul, .preview-content ol { padding-left: 20px; margin: 0 0 10px 0; }
                                                     .preview-content li { margin-bottom: 4px; }
+                                                    .preview-content a:not([style*="color"]), .ql-editor a:not([style*="color"]) { color: #2563eb; text-decoration: underline; cursor: pointer; }
                                                 `}
                                             </style>
 

@@ -67,6 +67,7 @@ export async function POST(req) {
         .sidebar-value { font-size: 11px; color: #1e293b; font-weight: 700; line-height: 1.3; }
         
         .button { display: inline-block; padding: 8px 16px; background-color: #6366f1; color: white !important; text-decoration: none; border-radius: 4px; margin-top: 15px; font-size: 10px; font-weight: 700; }
+        a { color: #2563eb; text-decoration: underline; }
         
         .job-header { background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 15px 30px; margin-bottom: 0; }
         .job-header-grid { display: table; width: 100%; border-collapse: collapse; }
