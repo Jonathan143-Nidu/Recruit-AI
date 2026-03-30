@@ -614,6 +614,7 @@ export default function DashboardTable({ data, headers, session }) {
 
                                     {/* Unified Menu Items */}
                                     {[
+                                        { label: 'JD Analyzer', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />, onClick: () => router.push('/jd-analyzer') },
                                         { label: 'Batch Sync', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M4 16c0-1.1.9-2 2-2h12a2 2 0 012 2M4 16V9a2 2 0 012-2h12a2 2 0 012 2v7" />, onClick: () => router.push('/gmail-sync') },
                                         { label: 'Jobs', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2zm0 0V5a2 2 0 00-2-2H6a2 2 0 00-2 2v2" />, onClick: () => router.push('/jobs') },
                                         { label: 'History', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />, onClick: () => router.push('/history') },
