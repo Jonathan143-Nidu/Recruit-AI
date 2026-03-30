@@ -33,7 +33,7 @@ export default async function Home({ searchParams }) {
   }
 
   const headers = rows.length > 0 ? rows[0] : [
-    "Name", "Role", "Exp", "Resume Says", "Email", "Phone", "LinkedIn", "Drive Folder", "Resume", "Sender", "Thread", "Processed By", "Fingerprint"
+    "Name", "Date", "Subject", "Role", "Exp", "Resume Says", "Email", "Phone", "LinkedIn", "Drive Folder", "Resume", "Sender", "Thread", "Processed By", "Fingerprint"
   ];
   const data = rows.length > 1 ? rows.slice(1) : [];
 

@@ -24,6 +24,7 @@ export default function DashboardTable({ data, headers, session }) {
         exp: '',
         visa: '',
         email: '',
+        subject: '',
         resumeSays: '',
         startDate: '',
         endDate: ''
@@ -57,6 +58,7 @@ export default function DashboardTable({ data, headers, session }) {
         const visaIdx = idx("Visa");
         const locIdx = idx("Location");
         const emailIdx = idx("Email");
+        const subjectIdx = idx("Subject");
         const dateIdx = idx("Date"); // New: Smart Timeline Column
         const resumeSaysIdx = idx("Resume Says"); // New: Tab-specific index
 
@@ -75,6 +77,7 @@ export default function DashboardTable({ data, headers, session }) {
             const visa = visaIdx !== -1 ? row[visaIdx]?.toString().toLowerCase() || '' : '';
             const location = locIdx !== -1 ? row[locIdx]?.toString().toLowerCase() || '' : '';
             const email = emailIdx !== -1 ? row[emailIdx]?.toString().toLowerCase() || '' : '';
+            const subjectCol = subjectIdx !== -1 ? row[subjectIdx]?.toString().toLowerCase() || '' : '';
             const resumeSays = resumeSaysIdx !== -1 ? row[resumeSaysIdx]?.toString().toLowerCase() || '' : '';
 
             // Global Search
@@ -86,7 +89,8 @@ export default function DashboardTable({ data, headers, session }) {
                     exp.includes(searchLower) ||
                     visa.includes(searchLower) ||
                     location.includes(searchLower) ||
-                    email.includes(searchLower);
+                    email.includes(searchLower) ||
+                    subjectCol.includes(searchLower);
 
                 if (!matchGlobal) return false;
             }
@@ -98,6 +102,7 @@ export default function DashboardTable({ data, headers, session }) {
                 exp.includes(filters.exp?.toLowerCase() || '') &&
                 visa.includes(filters.visa.toLowerCase()) &&
                 email.includes(filters.email.toLowerCase()) &&
+                subjectCol.includes(filters.subject.toLowerCase()) &&
                 (dbType === 'sync' ? resumeSays.includes(filters.resumeSays.toLowerCase()) : true) &&
                 (() => {
                     if (!filters.startDate && !filters.endDate) return true;
@@ -212,6 +217,7 @@ export default function DashboardTable({ data, headers, session }) {
         const resumeIdx = headers.findIndex(h => h.toLowerCase() === "resume");
         const linkedInIdx = idx("LinkedIn");
         const senderIdx = idx("Sender");
+        const subjectIdx = idx("Subject");
 
         const selectedData = Array.from(selectedRows).map(originalIdx => {
             const row = data[originalIdx];
@@ -226,7 +232,8 @@ export default function DashboardTable({ data, headers, session }) {
                 Phone: phoneIdx !== -1 ? row[phoneIdx] : "N/A",
                 Resume: resumeIdx !== -1 ? row[resumeIdx] : "N/A",
                 LinkedIn: linkedInIdx !== -1 ? row[linkedInIdx] : "N/A",
-                Sender: senderIdx !== -1 ? row[senderIdx] : "N/A"
+                Sender: senderIdx !== -1 ? row[senderIdx] : "N/A",
+                Subject: subjectIdx !== -1 ? row[subjectIdx] : "N/A"
             };
         }).filter(Boolean);
 
@@ -743,6 +750,7 @@ export default function DashboardTable({ data, headers, session }) {
                         ['exp', 'Exp'],
                         ['visa', 'Visa'],
                         ['email', 'Email'],
+                        ['subject', 'Subject'],
                         ...(dbType === 'sync' ? [['resumeSays', 'Resume Says']] : [])
                     ].map(([field, label]) => (
                         <div key={field} style={{
@@ -822,19 +830,20 @@ export default function DashboardTable({ data, headers, session }) {
                                             : hl === 'role' ? '120px'
                                                 : hl.includes('exp') ? '55px'
                                                     : hl === 'date' ? '120px'
-                                                        : hl.includes('resume says') ? '150px'
-                                                            : hl === 'visa' ? '65px'
-                                                                : hl === 'location' ? '110px'
-                                                                    : hl === 'email' ? '150px'
-                                                                        : hl === 'phone' ? '105px'
-                                                                            : hl === 'dob' ? '90px'
-                                                                                : hl === 'ppn' ? '90px'
-                                                                                    : hl === 'linkedin' ? '80px'
-                                                                                        : hl.includes('drive') ? '85px'
-                                                                                            : hl === 'resume' ? '75px'
-                                                                                                : hl === 'sender' ? '130px'
-                                                                                                    : hl === 'thread' ? '65px'
-                                                                                                        : '100px';
+                                                        : hl === 'subject' ? '140px'
+                                                            : hl.includes('resume says') ? '150px'
+                                                                : hl === 'visa' ? '65px'
+                                                                    : hl === 'location' ? '110px'
+                                                                        : hl === 'email' ? '150px'
+                                                                            : hl === 'phone' ? '105px'
+                                                                                : hl === 'dob' ? '90px'
+                                                                                    : hl === 'ppn' ? '90px'
+                                                                                        : hl === 'linkedin' ? '80px'
+                                                                                            : hl.includes('drive') ? '85px'
+                                                                                                : hl === 'resume' ? '75px'
+                                                                                                    : hl === 'sender' ? '130px'
+                                                                                                        : hl === 'thread' ? '65px'
+                                                                                                            : '100px';
                                     return (
                                         <th key={i} style={{ padding: '10px 8px', textAlign: 'left', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.4px', borderBottom: '1px solid #e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: colWidth }}>
                                             {h}
@@ -898,6 +907,30 @@ export default function DashboardTable({ data, headers, session }) {
                                                             alignItems: 'center'
                                                         }}>
                                                             📅 {formatted}
+                                                        </span>
+                                                    </td>
+                                                );
+                                            }
+
+                                            // Subject badge
+                                            if (header === 'subject' && cell && cell !== 'N/A') {
+                                                return (
+                                                    <td key={j} style={{ padding: '10px 12px' }}>
+                                                        <span style={{
+                                                            background: '#f5f3ff',
+                                                            color: '#7c3aed',
+                                                            padding: '3px 8px',
+                                                            borderRadius: '6px',
+                                                            fontSize: '11px',
+                                                            fontWeight: '700',
+                                                            border: '1px solid #ddd6fe',
+                                                            whiteSpace: 'nowrap',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            display: 'block',
+                                                            maxWidth: '120px'
+                                                        }} title={cell}>
+                                                            {cell}
                                                         </span>
                                                     </td>
                                                 );

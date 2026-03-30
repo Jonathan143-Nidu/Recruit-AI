@@ -412,7 +412,7 @@ export async function POST(req) {
         // If sheet is empty or legacy, we use a standard set of headers
         if (headers.length === 0) {
             headers = [
-                "Name", "Date", "Role", "Exp", "Skills", "Resume Says", "Email", "Phone", "LinkedIn", "Drive Folder", "Resume", "Sender", "Thread", "Processed By", "Fingerprint"
+                "Name", "Date", "Subject", "Role", "Exp", "Skills", "Resume Says", "Email", "Phone", "LinkedIn", "Drive Folder", "Resume", "Sender", "Thread", "Processed By", "Fingerprint"
             ];
             await sheets.spreadsheets.values.update({
                 spreadsheetId: targetSheetId,
@@ -442,6 +442,7 @@ export async function POST(req) {
 
         mapData("Name", candidateData.Resume_Name || candidateData.Name || 'N/A');
         mapData("Date", emailDate || 'N/A');
+        mapData("Subject", subject || 'N/A');
         mapData("Role", candidateData.Role_Name_Suggest || candidateData.Role || 'N/A');
         mapData("Exp", candidateData.Years_You_Calculate || candidateData['Years of Experience'] || 'N/A');
 
@@ -770,7 +771,7 @@ async function appendToSheet(values, customSheetId) {
         if (!headerCheck.data.values || headerCheck.data.values.length === 0) {
             console.log("Sheet is empty. Adding headers...");
             const headers = [
-                "Name", "Date", "Role", "Exp", "Resume Says", "Email", "Phone", "LinkedIn", "Drive Folder", "Resume", "Sender", "Thread", "Processed By", "Fingerprint"
+                "Name", "Date", "Subject", "Role", "Exp", "Resume Says", "Email", "Phone", "LinkedIn", "Drive Folder", "Resume", "Sender", "Thread", "Processed By", "Fingerprint"
             ];
             await sheets.spreadsheets.values.append({
                 spreadsheetId,
