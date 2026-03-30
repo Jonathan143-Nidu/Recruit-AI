@@ -39,7 +39,7 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { title, location, type, description, exp, rate, workMode } = body;
+    const { title, location, type, description, exp, rate, workMode, priority } = body;
 
     if (!title || !description) {
         return NextResponse.json({ error: 'Title and description are required' }, { status: 400 });
@@ -58,6 +58,7 @@ export async function POST(req) {
         description,
         posted: new Date().toISOString(),
         active: true,
+        priority: priority || false,
         status: body.status || 'Open',
         mustHave: body.mustHave || ''
     };

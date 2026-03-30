@@ -8,7 +8,7 @@ const ADMIN_EMAIL = 'careers@innovcentric.com';
 const PAGE_SIZE = 50;
 const JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship'];
 const WORK_MODES = ['Remote', 'Onsite', 'Hybrid', 'Onsite or Hybrid'];
-const EMPTY_FORM = { title: '', location: '', type: 'Full-time', workMode: 'Remote', exp: '', rate: '', description: '', status: 'Open', mustHave: '' };
+const EMPTY_FORM = { title: '', location: '', type: 'Full-time', workMode: 'Remote', exp: '', rate: '', description: '', status: 'Open', mustHave: '', priority: false };
 
 export default function JobsPage() {
     const { data: session, status } = useSession();
@@ -51,7 +51,11 @@ export default function JobsPage() {
             const url = `${baseUrl}${isAdmin ? '&' : '?'}t=${Date.now()}`;
             const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
-            const sorted = Array.isArray(data) ? data.sort((a, b) => new Date(b.posted) - new Date(a.posted)) : [];
+            const sorted = Array.isArray(data) ? data.sort((a, b) => {
+                if (a.priority && !b.priority) return -1;
+                if (!a.priority && b.priority) return 1;
+                return new Date(b.posted) - new Date(a.posted);
+            }) : [];
             setJobs(sorted);
         } catch { setJobs([]); }
         setLoading(false);
@@ -83,7 +87,7 @@ export default function JobsPage() {
     const handleNewJob = () => { setEditingJob(null); setFormData(EMPTY_FORM); setShowForm(true); };
     const handleEdit = (job) => {
         setEditingJob(job);
-        setFormData({ title: job.title, location: job.location, type: job.type, workMode: job.workMode || 'Remote', exp: job.exp || '', rate: job.rate || '', description: job.description, status: job.status || 'Open', mustHave: job.mustHave || '' });
+        setFormData({ title: job.title, location: job.location, type: job.type, workMode: job.workMode || 'Remote', exp: job.exp || '', rate: job.rate || '', description: job.description, status: job.status || 'Open', mustHave: job.mustHave || '', priority: job.priority || false });
         setShowForm(true);
     };
     const handleSave = async () => {
@@ -387,7 +391,10 @@ export default function JobsPage() {
                                                 {job.posted ? new Date(job.posted).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
                                             </td>
                                             <td style={{ padding: '11px 4px', fontWeight: '600', color: '#6366f1', whiteSpace: 'nowrap', textAlign: 'center' }}>{job.jobId}</td>
-                                            <td style={{ padding: '11px 4px', fontWeight: '600', color: '#0f172a', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>{job.title}</td>
+                                            <td style={{ padding: '11px 4px', fontWeight: '600', color: '#0f172a', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                                                {job.priority && <span title="High Priority" style={{ marginRight: '4px', fontSize: '13px' }}>🔥</span>}
+                                                {job.title}
+                                            </td>
                                             <td style={{ padding: '11px 4px', color: '#475569', textAlign: 'center' }}>{job.exp || '—'}</td>
                                             <td style={{ padding: '11px 4px', color: '#475569', textAlign: 'center' }}>{job.location}</td>
                                             <td title={job.mustHave || ''} style={{ padding: '11px 4px', color: '#64748b', maxWidth: '350px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center', cursor: 'default' }}>{job.mustHave || '—'}</td>
@@ -532,6 +539,13 @@ export default function JobsPage() {
                                         <select value={formData.status} onChange={e => setFormData(p => ({ ...p, status: e.target.value }))} style={{ width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#0f172a', background: 'white' }}>
                                             <option value="Open">Open</option>
                                             <option value="Closed">Closed</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Priority Level</label>
+                                        <select value={formData.priority ? 'true' : 'false'} onChange={e => setFormData(p => ({ ...p, priority: e.target.value === 'true' }))} style={{ width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#0f172a', background: formData.priority ? '#fffbeb' : 'white', borderColor: formData.priority ? '#fde047' : '#e2e8f0' }}>
+                                            <option value="false">Normal</option>
+                                            <option value="true">🔥 High Priority (Pinned)</option>
                                         </select>
                                     </div>
                                 </div>
