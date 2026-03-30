@@ -609,7 +609,6 @@ export default function DashboardTable({ data, headers, session }) {
                                     {[
                                         { label: 'Batch Sync', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M4 16c0-1.1.9-2 2-2h12a2 2 0 012 2M4 16V9a2 2 0 012-2h12a2 2 0 012 2v7" />, onClick: () => router.push('/gmail-sync') },
                                         { label: 'Jobs', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2zm0 0V5a2 2 0 00-2-2H6a2 2 0 00-2 2v2" />, onClick: () => router.push('/jobs') },
-                                        { label: 'Download Extension', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M4 12l8 8 8-8M12 4v16" />, onClick: () => { const a = document.createElement('a'); a.href = '/innovcentric-extension.zip'; a.download = 'innovcentric-extension.zip'; a.click(); } },
                                         { label: 'History', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />, onClick: () => router.push('/history') },
                                     ].map(item => (
                                         <div key={item.label} className="user-menu-item" onClick={item.onClick} style={{ padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', fontWeight: '600', margin: '2px 0' }}>

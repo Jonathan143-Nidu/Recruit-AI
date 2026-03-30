@@ -10,14 +10,6 @@ const require = createRequire(import.meta.url);
 
 export const maxDuration = 300; // Allow 5 minute execution for large AI tasks
 
-export const config = {
-    api: {
-        bodyParser: {
-            sizeLimit: '50mb', // Increase from default 4mb
-        },
-    },
-};
-
 // [FIX] Polyfill DOMMatrix & ImageData for pdf-parse/pdfjs-dist in Node environment
 // We FORCE override these because some Node environments have partial/broken Class-only versions 
 // that cause "Class constructor cannot be invoked without 'new'" errors.
@@ -115,8 +107,11 @@ export async function POST(req) {
 
         // 1. Validate Access Code
         if (accessCode !== ACCESS_CODE) {
+            console.warn(`[AUTH] Access Code Mismatch. Received: ${accessCode}`);
             return NextResponse.json({ error: 'Invalid Access Code' }, { status: 401 });
         }
+
+        console.log(`[PROCESS] Starting extraction for: ${subject}`);
 
         // 2. Parse Text content from ALL attachments (Resume, Visa Docs, etc.)
         let resumeText = '';
@@ -191,35 +186,23 @@ export async function POST(req) {
                 for (let i = 1; i < existingRows.length; i++) {
                     const row = existingRows[i];
                     const existingFingerprint = fingerprintIdx !== -1 ? row[fingerprintIdx] : null;
-                    const existingEmail = emailIdx !== -1 ? row[emailIdx] : null;
-
-                    // [FIX] Gmail 'From' often looks like: "John Doe" <john@example.com>. We need just the email.
-                    const extractEmail = (str) => {
-                        if (!str) return null;
-                        const match = str.match(/<([^>]+)>/);
-                        return match ? match[1].trim().toLowerCase() : str.trim().toLowerCase();
-                    };
-
-                    const cleanSenderEmail = extractEmail(senderEmail);
-                    const cleanExistingEmail = extractEmail(existingEmail);
 
                     if (
                         (messageId && existingFingerprint === messageId) ||
-                        (threadId && existingFingerprint === threadId) ||
-                        (cleanSenderEmail && cleanExistingEmail && cleanExistingEmail === cleanSenderEmail)
+                        (threadId && existingFingerprint === threadId)
                     ) {
-                        console.log(`[DEDUPLICATION] Skipping already processed candidate. Message: ${messageId}, Thread: ${threadId}, Email: ${cleanSenderEmail}`);
+                        console.log(`[DEDUPLICATION] Fingerprint Match Found: ${messageId || threadId}`);
                         return NextResponse.json({
                             success: true,
                             skipped: true,
-                            reason: "Duplicate candidate already exists in the database.",
-                            details: "Matched on Email, Message, or Thread Fingerprint."
+                            reason: "Thread already processed.",
+                            details: "Matched on Fingerprint."
                         });
                     }
                 }
             }
         } catch (e) {
-            console.warn("[DEDUPLICATION ERROR] Could not verify uniqueness, proceeding with extraction.", e.message);
+            console.warn("[DEDUPLICATION ERROR] Could not verify uniqueness:", e.message);
         }
 
         // 4. Extract Candidate Data using OpenAI or DeepSeek
@@ -280,12 +263,12 @@ export async function POST(req) {
                     if (rowEmail) {
                         const cleanRowEmail = rowEmail.trim().toLowerCase();
                         if (cleanRowEmail === cleanCandidateEmail) {
-                            console.log(`[DEEP DEDUPLICATION] Candidate ${cleanCandidateEmail} already exists (Sent by another vendor). Skipping ingestion.`);
+                            console.log(`[DEEP DEDUPLICATION] Candidate ${cleanCandidateEmail} found in row ${i + 1}`);
                             return NextResponse.json({
                                 success: true,
                                 skipped: true,
-                                reason: "Candidate already exists in the database from another source.",
-                                details: `Matched on candidate internal email: ${cleanCandidateEmail}`
+                                reason: `Candidate already exists (${cleanCandidateEmail}).`,
+                                details: `Matched row ${i + 1} email.`
                             });
                         }
                     }
@@ -293,20 +276,23 @@ export async function POST(req) {
             }
         }
 
-        // 5. Determine or Create the Target Role Folder (Using Atomic Lock)
+        // 5. Determine or Create the Target Role Folder
         const roleFolderName = manualFolderName || candidateData.Role || 'General';
+        console.log(`[DRIVE] Preparing folder for role: ${roleFolderName}`);
         let roleFolderId = manualFolderId;
 
         if (!roleFolderId) {
             roleFolderId = await getSynchronizedFolder(roleFolderName, targetDriveParentId);
         }
 
-        // 5. Create Candidate Folder inside the Target Role Folder (Using Atomic Lock)
+        // Create Candidate Folder
         const candidateFolderName = `${candidateData.Name} - ${candidateData.Email || 'No Email'}`;
+        console.log(`[DRIVE] Creating candidate folder: ${candidateFolderName}`);
         let candidateFolderId = await getSynchronizedFolder(candidateFolderName, roleFolderId);
 
         // 6. Save Attachments (with Matchmaker 2.1 Filter)
         const uploadedFiles = [];
+        const moveErrors = [];
 
         // PATH A: Files were already uploaded directly to Google Drive by the Extension
         if (requestUploadedFiles && requestUploadedFiles.length > 0) {
@@ -318,23 +304,27 @@ export async function POST(req) {
                 try {
                     const fileObj = await drive.files.get({
                         fileId: uploadedFile.id,
-                        fields: 'parents'
+                        fields: 'parents',
+                        supportsAllDrives: true  // [FIX] Required for shared/team drives
                     });
 
-                    const previousParents = fileObj.data.parents ? fileObj.data.parents.join(',') : '';
+                    // Only remove if there are parents
+                    const previousParents = (fileObj.data.parents || []).join(',');
 
                     await drive.files.update({
                         fileId: uploadedFile.id,
                         addParents: candidateFolderId,
-                        removeParents: previousParents,
-                        fields: 'id, parents'
+                        removeParents: previousParents || undefined,
+                        fields: 'id, parents',
+                        supportsAllDrives: true  // [FIX] Required for shared/team drives
                     });
 
                     const fileLink = `https://drive.google.com/file/d/${uploadedFile.id}/view`;
                     uploadedFiles.push({ name: uploadedFile.name, link: fileLink });
                     console.log(`[DRIVE BYPASS] Successfully moved ${uploadedFile.name} into Candidate Folder`);
                 } catch (moveErr) {
-                    console.error(`[DRIVE BYPASS ERROR] Failed to move file ${uploadedFile.id} to folder ${candidateFolderId}:`, moveErr.message);
+                    console.error(`[DRIVE BYPASS ERROR] Failed to move file ${uploadedFile.id}:`, moveErr.message);
+                    moveErrors.push({ name: uploadedFile.name, error: moveErr.message });
                 }
             }
         }
@@ -368,21 +358,41 @@ export async function POST(req) {
 
         // 7. Log to Google Sheet
         const driveFolderLink = `https://drive.google.com/drive/folders/${candidateFolderId}`;
+        const aiIdentifiedResume = (candidateData.Identified_Resume_Filename || "").toLowerCase();
 
         // [SMART-LINK] Find the actual resume from uploadedFiles using Name-Based Matching
         let resumeLink = '';
         if (uploadedFiles.length > 0) {
-            const bestResume = attachments.find(att => {
+            // Priority 1: AI Identified Filename
+            let bestResumeAtt = attachments.find(att => {
                 const low = att.name.toLowerCase();
-                const isDoc = low.endsWith('.pdf') || low.endsWith('.docx') || low.endsWith('.doc');
-                const isID = /dl|license|passport|visa|h1b|i-94|i94|id_copy|identification/.test(low);
-                return isDoc && !isID;
+                return aiIdentifiedResume && (low.includes(aiIdentifiedResume) || aiIdentifiedResume.includes(low));
             });
 
-            if (bestResume) {
-                const matchedFile = uploadedFiles.find(f => f.name === bestResume.name);
+            // Priority 2: Filename containing "resume" or "cv"
+            if (!bestResumeAtt) {
+                bestResumeAtt = attachments.find(att => {
+                    const low = att.name.toLowerCase();
+                    return low.includes('resume') || low.includes('cv') || low.includes('curriculum');
+                });
+            }
+
+            // Priority 3: Fallback - any document that IS NOT an ID/Visa
+            if (!bestResumeAtt) {
+                bestResumeAtt = attachments.find(att => {
+                    const low = att.name.toLowerCase();
+                    const isDoc = low.endsWith('.pdf') || low.endsWith('.docx') || low.endsWith('.doc');
+                    // [AGGRESSIVE TRASH FILTER] Strictly exclude IDs, Visa Docs, I-797s, DLs, etc.
+                    const isID = /dl|license|passport|visa|h1b|i797|i-797|i94|i-94|id|state|card|ssn|utility|bill|notice|receipt|form|copy/.test(low);
+                    return isDoc && !isID;
+                });
+            }
+
+            if (bestResumeAtt) {
+                const matchedFile = uploadedFiles.find(f => f.name === bestResumeAtt.name);
                 resumeLink = matchedFile ? matchedFile.link : (uploadedFiles[0]?.link || '');
             } else {
+                // Last ditch fallback
                 resumeLink = uploadedFiles[0]?.link || '';
             }
         }
@@ -465,7 +475,12 @@ export async function POST(req) {
 
         await appendToSheet(rowData, targetSheetId);
 
-        return NextResponse.json({ success: true, candidate: candidateData, folder: driveFolderLink });
+        return NextResponse.json({ 
+            success: true, 
+            candidate: candidateData, 
+            folder: driveFolderLink,
+            moveErrors: moveErrors.length > 0 ? moveErrors : null
+        });
 
     } catch (error) {
         console.error('Error processing request:', error);
@@ -486,11 +501,15 @@ async function extractCandidateData(subject, body, resumeText, attachments, proc
     4. Start dates and end dates for every project/job.
     5. Name.
     6. Email, Phone, LinkedIn URL (if present), and Location/City.
-    7. Visa/Work Authorization status (if mentioned in resume or attachments like H1B/EAD receipt).
+    7. Visa/Work Authorization status (if mentioned in resume OR attachments OR AND ESPECIALLY the email body).
     8. Date of Birth (DOB) (if mentioned).
-    9. Passport Number (PPN) (if mentioned).
+    9. Passport Number (PPN) (if mentioned in the email body OR resume. DO NOT skip if it's clearly stated in the Email Body).
     10. Top_Skills: Extract a comma-separated list of the top 15 to 20 technical skills, programming languages, and frameworks found in the resume.
 
+    ### SOURCE PRIORITY FOR PPN/VISA/DOB:
+    - If you find a Passport Number or Visa status in the **Email Body**, USE IT even if it's missing from the Resume text. People often include newer info in their emails.
+    - If the email body says "Passport number M1234567", you MUST extract "M1234567" into the PPN field.
+    
     ### DATE SYNONYMS (TREAT AS FEB 24, 2026):
     Whenever you see these words, treat them as TODAY (February 24, 2026):
     - "Present", "Till Date", "To Date", "Currently", "Today", "Up to date", "Still Working".
@@ -526,6 +545,7 @@ async function extractCandidateData(subject, body, resumeText, attachments, proc
       "DOB": "Date of birth or 'N/A'",
       "PPN": "Passport number or 'N/A'",
       "Documents_Found": "Resume, H1B, Passport, etc.",
+      "Identified_Resume_Filename": "filename.pdf (PICK THE ACTUAL RESUME. IGNORE IDs, PASS-PORTS, VISAS, OR I-797 FORMS)",
       "Belongs_To_Me_Files": ["file1.pdf", "image2.jpg"]
     }
 
@@ -630,14 +650,19 @@ async function parseAttachmentText(file) {
             if (!pdfParse) return `[PDF PARSER MISSING]`;
 
             try {
-                const data = await pdfParse(buffer);
+                // [FIX] Passing custom options prevents pdf-parse from trying to load its own test PDFs (ENOENT error)
+                const options = { pagerender: (pageData) => pageData.getTextContent().then(c => c.items.map(i => i.str).join(' ')) };
+                const data = await pdfParse(buffer, options);
                 return data.text || "";
-            } catch (e) {
-                if (e.message.includes("Class constructor")) {
-                    const data = await new pdfParse(buffer);
+            } catch (pErr) {
+                // Fallback for different pdf-parse exports or constructor issues
+                try {
+                    const data = await pdfParse(buffer);
                     return data.text || "";
+                } catch (e2) {
+                    console.error("[PDF ERROR] Final fallback failed:", e2.message);
+                    return "";
                 }
-                throw e;
             }
         }
 

@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Gmail Candidate Saver",
+  "version": "1.0",
+  "description": "Extract candidate data from Gmail and save to Drive/Sheets via Next.js App.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "notifications"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "https://*.vercel.app/*",
+    "https://recruit.innovcentric.com/*",
+    "https://mail.google.com/*",
+    "https://mail-attachment.googleusercontent.com/*",
+    "https://www.googleapis.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://mail.google.com/*"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
