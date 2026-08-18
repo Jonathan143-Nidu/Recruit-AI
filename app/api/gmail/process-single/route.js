@@ -43,10 +43,12 @@ export async function POST(req) {
         let from = "";
 
         // 3. Loop through EVERY message in the thread
+        let extractedDate = emailDate || "";
         for (const message of thread.data.messages) {
             const mHeaders = message.payload.headers;
             if (!subject) subject = mHeaders.find(h => h.name === 'Subject')?.value || 'No Subject';
             if (!from) from = mHeaders.find(h => h.name === 'From')?.value || 'Unknown';
+            if (!extractedDate) extractedDate = mHeaders.find(h => h.name === 'Date')?.value || '';
 
             // Extract Body (Handle Multipart)
             function findBody(part) {
@@ -144,7 +146,7 @@ export async function POST(req) {
                             threadLink: `https://mail.google.com/mail/u/0/#inbox/${thread.data.id}`,
                             threadId: thread.data.id,
                             messageId: resume.processedFromMessageId || messageId, // [NEW] Pass messageId for precise fingerprinting
-                            emailDate: emailDate, // Pass through
+                            emailDate: extractedDate, // Pass through
                             processedBy: session.user.email,
                             keyOffset: keyOffset + index
                         })
@@ -174,7 +176,7 @@ export async function POST(req) {
                     threadLink: `https://mail.google.com/mail/u/0/#inbox/${thread.data.id}`,
                     threadId: thread.data.id,
                     messageId: messageId, // [NEW] Pass messageId for precise fingerprinting
-                    emailDate: emailDate, // Pass through
+                    emailDate: extractedDate, // Pass through
                     processedBy: session.user.email
                 })
             });

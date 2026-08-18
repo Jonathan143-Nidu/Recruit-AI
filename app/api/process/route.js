@@ -440,8 +440,24 @@ export async function POST(req) {
             if (idx !== null) rowData[idx] = value;
         };
 
+        const formatDateString = (rawDate) => {
+            if (!rawDate || rawDate === 'N/A') {
+                const today = new Date();
+                const mm = String(today.getMonth() + 1).padStart(2, '0');
+                const dd = String(today.getDate()).padStart(2, '0');
+                const yyyy = today.getFullYear();
+                return `${mm}/${dd}/${yyyy}`;
+            }
+            const d = new Date(rawDate);
+            if (isNaN(d.getTime())) return rawDate;
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const yyyy = d.getFullYear();
+            return `${mm}/${dd}/${yyyy}`;
+        };
+
         mapData("Name", candidateData.Resume_Name || candidateData.Name || 'N/A');
-        mapData("Date", emailDate || 'N/A');
+        mapData("Date", formatDateString(emailDate));
         mapData("Subject", subject || 'N/A');
         mapData("Role", candidateData.Role_Name_Suggest || candidateData.Role || 'N/A');
         mapData("Exp", candidateData.Years_You_Calculate || candidateData['Years of Experience'] || 'N/A');
