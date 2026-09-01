@@ -375,11 +375,13 @@ export default function DashboardTable({ data, headers, session }) {
         "Name", "Date", "Subject", "Role", "EXP", "Visa", "Location", "Skills", "Resume Says", "Email", "Phone", "DOB", "PPN", "LinkedIn", "Drive Folder", "Resume", "Sender", "Thread", "Processed By", "Fingerprint"
     ] : headers;
 
-    // Helper to check if a string looks like a Visa status
+    // Helper to check if a string looks like a Visa status (Strict Word Boundaries to avoid 'Lead' matching 'ead')
     const isVisaValue = (val) => {
         if (!val) return false;
-        const v = val.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-        return v.includes('h1') || v.includes('h4') || v.includes('gc') || v.includes('green') || v.includes('usc') || v.includes('opt') || v.includes('cpt') || v.includes('citizen') || v.includes('ead');
+        const v = val.toString().toLowerCase().trim();
+        if (v.includes('lead') || v.includes('report') || v.includes('manager') || v.includes('developer') || v.includes('architect') || v.includes('engineer')) return false;
+        const clean = v.replace(/[^a-z0-9]/g, '');
+        return clean === 'h1' || clean === 'h1b' || clean.includes('h1b') || clean === 'gc' || clean.includes('greencard') || clean.includes('h4') || clean.includes('usc') || clean.includes('opt') || clean.includes('cpt') || clean.includes('citizen') || clean === 'ead' || clean === 'h4ead';
     };
 
     // Smart dynamic cell resolver ONLY for Master DB tab matching attributes across all row formats
@@ -1001,8 +1003,19 @@ export default function DashboardTable({ data, headers, session }) {
 
                                             // Date badge
                                             if (header === 'date' && cell && cell !== 'N/A') {
-                                                const d = new Date(cell);
-                                                const formatted = isNaN(d) ? cell : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                                const parseDateObj = (val) => {
+                                                    if (!val) return null;
+                                                    const str = val.toString().trim();
+                                                    if (!isNaN(str) && Number(str) > 30000 && Number(str) < 70000) {
+                                                        const dateNum = Number(str);
+                                                        const d = new Date((dateNum - 25569) * 86400 * 1000);
+                                                        return isNaN(d.getTime()) ? null : d;
+                                                    }
+                                                    const d = new Date(str);
+                                                    return isNaN(d.getTime()) ? null : d;
+                                                };
+                                                const d = parseDateObj(cell);
+                                                const formatted = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : cell.toString();
                                                 return (
                                                     <td key={j} style={{ padding: '10px 12px' }}>
                                                         <span style={{
