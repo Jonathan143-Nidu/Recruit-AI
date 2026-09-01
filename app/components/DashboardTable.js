@@ -367,6 +367,10 @@ export default function DashboardTable({ data, headers, session }) {
         const h = header.toLowerCase();
         if (h.includes('drive')) return 'Drive';
         if (h.includes('resume')) return 'Resume';
+        if (h.includes('thread')) return 'Thread';
+        if (h.includes('linkedin')) return 'LinkedIn';
+        return 'Link';
+    };
     const effectiveHeaders = dbType === 'master' ? [
         "Name", "Date", "Subject", "Role", "EXP", "Visa", "Location", "Skills", "Resume Says", "Email", "Phone", "DOB", "PPN", "LinkedIn", "Drive Folder", "Resume", "Sender", "Thread", "Processed By", "Fingerprint"
     ] : headers;
