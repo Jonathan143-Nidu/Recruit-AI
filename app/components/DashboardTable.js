@@ -367,10 +367,106 @@ export default function DashboardTable({ data, headers, session }) {
         const h = header.toLowerCase();
         if (h.includes('drive')) return 'Drive';
         if (h.includes('resume')) return 'Resume';
-        if (h.includes('thread')) return 'Thread';
-        if (h.includes('linkedin')) return 'LinkedIn';
-        return 'Link';
+    const effectiveHeaders = dbType === 'master' ? [
+        "Name", "Date", "Subject", "Role", "EXP", "Visa", "Location", "Skills", "Resume Says", "Email", "Phone", "DOB", "PPN", "LinkedIn", "Drive Folder", "Resume", "Sender", "Thread", "Processed By", "Fingerprint"
+    ] : headers;
+
+    // Helper to check if a string looks like a Visa status
+    const isVisaValue = (val) => {
+        if (!val) return false;
+        const v = val.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+        return v.includes('h1') || v.includes('h4') || v.includes('gc') || v.includes('green') || v.includes('usc') || v.includes('opt') || v.includes('cpt') || v.includes('citizen') || v.includes('ead');
     };
+
+    // Smart dynamic cell resolver ONLY for Master DB tab matching attributes across all row formats
+    const getMasterDbCell = (row, h, j) => {
+        if (!row || !Array.isArray(row)) return '';
+        const hl = h ? h.toLowerCase() : '';
+        const strVal = (val) => (val !== null && val !== undefined) ? val.toString() : '';
+
+        // Find attribute indices dynamically within row
+        const emailIndex = row.findIndex(cell => cell && typeof cell === 'string' && cell.includes('@') && !cell.startsWith('http'));
+        const phoneIndex = row.findIndex((cell, idx) => idx !== emailIndex && cell && typeof cell === 'string' && (cell.includes('+1') || /^\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}$/.test(cell.trim())));
+        const dobIndex = row.findIndex((cell, idx) => idx >= 7 && cell && typeof cell === 'string' && (/\b(19\d{2}|20\d{2})\b/.test(cell) || /\d{1,2}\/\d{1,2}\/\d{2,4}/.test(cell)) && !cell.includes('@') && !cell.startsWith('http'));
+        const visaIndex = row.findIndex(cell => isVisaValue(cell));
+        const expValue = row.find(c => c && /^\d{1,2}(\.\d)?$/.test(c.toString().trim()));
+
+        // Rows 1-225 layout vs Rows 226+ layout
+        const isStandardLayout = row.length >= 13 && (isVisaValue(row[5]) || isVisaValue(row[4]));
+
+        if (isStandardLayout) {
+            const hasVisaAt5 = isVisaValue(row[5]);
+            if (hasVisaAt5) {
+                if (hl === 'name') return strVal(row[0]);
+                if (hl === 'date') return strVal(row[1]);
+                if (hl === 'subject') return strVal(row[2]);
+                if (hl === 'role') return strVal(row[3]);
+                if (hl.includes('exp')) return strVal(row[4]);
+                if (hl === 'visa') return strVal(row[5]);
+                if (hl === 'location') return strVal(row[6]);
+                if (hl === 'skills') return strVal(row[7]);
+                if (hl.includes('resume says')) return strVal(row[8]);
+                if (hl === 'email') return strVal(row[9]);
+                if (hl === 'phone') return strVal(row[10]);
+                if (hl === 'dob') return strVal(row[11]);
+                if (hl === 'ppn' || hl.includes('passport') || hl === 'code') return strVal(row[12]);
+                if (hl === 'linkedin') return strVal(row[13]);
+                if (hl.includes('drive')) return strVal(row[14]);
+                if (hl === 'resume') return strVal(row[15]);
+                if (hl === 'sender') return strVal(row[16]);
+                if (hl === 'thread') return strVal(row[17]);
+            } else {
+                if (hl === 'name') return strVal(row[0]);
+                if (hl === 'date') return strVal(row[8] || row[1]);
+                if (hl === 'subject') return strVal(row[1]);
+                if (hl === 'role') return strVal(row[2]);
+                if (hl.includes('exp')) return strVal(row[3]);
+                if (hl === 'visa') return strVal(row[4]);
+                if (hl === 'location') return strVal(row[5]);
+                if (hl === 'skills') return '';
+                if (hl.includes('resume says')) return strVal(row[6]);
+                if (hl === 'email') return strVal(row[6]);
+                if (hl === 'phone') return strVal(row[7]);
+                if (hl === 'dob') return strVal(row[8]);
+                if (hl === 'ppn' || hl.includes('passport') || hl === 'code') return strVal(row[9]);
+                if (hl === 'linkedin') return strVal(row[10] || row[9]);
+                if (hl.includes('drive')) return strVal(row[11] || row[10]);
+                if (hl === 'resume') return strVal(row[12] || row[11]);
+                if (hl === 'sender') return strVal(row[13] || row[12]);
+                if (hl === 'thread') return strVal(row[14] || row[13]);
+            }
+        } else {
+            // Rows 226+ layout smart resolver
+            if (hl === 'name') {
+                const col0 = strVal(row[0]);
+                if (col0.includes('Match Report') || col0.includes('RTR') || col0.includes('RE:') || col0.includes('Profile')) {
+                    const match = col0.match(/(?:-|–|:)\s*([A-Za-z\s]+)$/);
+                    return match ? match[1].trim() : col0;
+                }
+                return col0;
+            }
+            if (hl === 'date') return strVal(row[1]); // Col B in Google Sheet!
+            if (hl === 'subject') return strVal(row[0]);
+            if (hl === 'role') return strVal(row[1]);
+            if (hl.includes('exp')) return strVal(expValue || row[2]);
+            if (hl === 'visa') return visaIndex !== -1 ? strVal(row[visaIndex]) : strVal(row[3]);
+            if (hl === 'location') return strVal(row.find((c, idx) => idx >= 3 && idx <= 6 && typeof c === 'string' && (c.includes(',') || c.includes('TX') || c.includes('NC') || c.includes('CA') || c.includes('NJ') || c.includes('GA') || c.includes('FL') || c.includes('MA'))) || row[4]);
+            if (hl === 'skills') return strVal(row[5] || row[3]);
+            if (hl.includes('resume says')) return strVal(row[6] || row[4]);
+            if (hl === 'email') return strVal(emailIndex !== -1 ? row[emailIndex] : row[7]);
+            if (hl === 'phone') return strVal(phoneIndex !== -1 ? row[phoneIndex] : row[8]);
+            if (hl === 'dob') return strVal(dobIndex !== -1 ? row[dobIndex] : '');
+            if (hl === 'ppn' || hl.includes('passport') || hl === 'code') return strVal(row.find((c, idx) => idx >= 7 && idx <= 10 && typeof c === 'string' && /^[A-Za-z0-9]{7,10}$/.test(c.trim()) && !c.includes('@')));
+            if (hl === 'linkedin') return strVal(row.find(c => c && typeof c === 'string' && c.includes('linkedin')) || row[9]);
+            if (hl.includes('drive')) return strVal(row.find(c => c && typeof c === 'string' && c.includes('drive')) || row[10]);
+            if (hl === 'resume') return strVal(row.find(c => c && typeof c === 'string' && c.includes('view')) || row[11]);
+            if (hl === 'sender') return strVal(row.find((c, idx) => idx >= 10 && typeof c === 'string' && c.includes('@')) || row[12]);
+            if (hl === 'thread') return strVal(row.find(c => c && typeof c === 'string' && c.includes('mail.google.com')) || row[13]);
+        }
+        return strVal(row[j]);
+    };
+
+    // Helper to determine link label
 
     return (
         <div style={{ background: 'white', color: '#0f172a', fontFamily: '"Inter", system-ui, sans-serif', minHeight: '100vh', display: 'flex', flexDirection: 'column', fontSize: '14px' }}>
@@ -832,7 +928,7 @@ export default function DashboardTable({ data, headers, session }) {
                                     <input type="checkbox" className="check-custom" checked={isAllSelected} onChange={handleSelectAll} />
                                 </th>
                                 <th style={{ padding: '10px 6px', textAlign: 'center', width: '28px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.4px', borderBottom: '1px solid #e2e8f0' }}>#</th>
-                                {headers.map((h, i) => {
+                                {effectiveHeaders.map((h, i) => {
                                     const hl = h.toLowerCase();
                                     if (hl === 'processed by' || hl === 'fingerprint') return null;
 
@@ -840,15 +936,15 @@ export default function DashboardTable({ data, headers, session }) {
                                         hl === 'name' ? '130px'
                                             : hl === 'role' ? '120px'
                                                 : hl.includes('exp') ? '55px'
-                                                    : hl === 'date' ? '120px'
+                                                    : hl === 'date' ? '125px'
                                                         : hl === 'subject' ? '140px'
                                                             : hl.includes('resume says') ? '150px'
-                                                                : hl === 'visa' ? '65px'
+                                                                : hl === 'visa' ? '85px'
                                                                     : hl === 'location' ? '110px'
                                                                         : hl === 'email' ? '150px'
                                                                             : hl === 'phone' ? '105px'
-                                                                                : hl === 'dob' ? '90px'
-                                                                                    : hl === 'ppn' ? '90px'
+                                                                                : hl === 'dob' ? '125px'
+                                                                                    : hl === 'ppn' ? '110px'
                                                                                         : hl === 'linkedin' ? '80px'
                                                                                             : hl.includes('drive') ? '85px'
                                                                                                 : hl === 'resume' ? '75px'
@@ -880,8 +976,8 @@ export default function DashboardTable({ data, headers, session }) {
                                         <td style={{ padding: '11px 6px', textAlign: 'center', color: '#94a3b8', fontSize: '12px', fontWeight: '600' }}>
                                             {globalIndex + 1}
                                         </td>
-                                        {headers.map((h, j) => {
-                                            const cell = row[j];
+                                        {effectiveHeaders.map((h, j) => {
+                                            const cell = dbType === 'master' ? getMasterDbCell(row, h, j) : row[j];
                                             const url = extractUrl(cell);
                                             const header = h.toLowerCase();
 
