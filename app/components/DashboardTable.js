@@ -1006,10 +1006,22 @@ export default function DashboardTable({ data, headers, session }) {
                                                 const parseDateObj = (val) => {
                                                     if (!val) return null;
                                                     const str = val.toString().trim();
+                                                    // Google Sheets Date Serial Number
                                                     if (!isNaN(str) && Number(str) > 30000 && Number(str) < 70000) {
                                                         const dateNum = Number(str);
                                                         const d = new Date((dateNum - 25569) * 86400 * 1000);
                                                         return isNaN(d.getTime()) ? null : d;
+                                                    }
+                                                    // Explicit US Format MM/DD/YYYY parser
+                                                    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
+                                                        const parts = str.split('/');
+                                                        const month = parseInt(parts[0], 10);
+                                                        const day = parseInt(parts[1], 10);
+                                                        const year = parseInt(parts[2], 10);
+                                                        if (month >= 1 && month <= 12) {
+                                                            const d = new Date(year, month - 1, day);
+                                                            return isNaN(d.getTime()) ? null : d;
+                                                        }
                                                     }
                                                     const d = new Date(str);
                                                     return isNaN(d.getTime()) ? null : d;
