@@ -125,17 +125,27 @@ export default function DashboardTable({ data, headers, session }) {
             );
         });
 
-        // [SMART SORT] Interleave candidates by Date (Newest First)
-        if (dateIdx !== -1) {
-            filtered.sort((a, b) => {
-                const dateA = new Date(a[dateIdx] || 0);
-                const dateB = new Date(b[dateIdx] || 0);
-                // Handle invalid dates (fallback to bottom)
-                if (isNaN(dateA.getTime())) return 1;
-                if (isNaN(dateB.getTime())) return -1;
-                return dateB - dateA; // Newest First
-            });
-        }
+        // [SMART SORT] Interleave candidates by Date (Newest First), then fallback to Newest Google Sheet Row First
+        filtered.sort((a, b) => {
+            const parseDate = (val) => {
+                if (!val || val === 'N/A') return null;
+                const d = new Date(val);
+                return isNaN(d.getTime()) ? null : d;
+            };
+            const dateA = dateIdx !== -1 ? parseDate(a[dateIdx]) : null;
+            const dateB = dateIdx !== -1 ? parseDate(b[dateIdx]) : null;
+
+            if (dateA && dateB) {
+                if (dateB.getTime() !== dateA.getTime()) {
+                    return dateB.getTime() - dateA.getTime();
+                }
+            }
+            if (dateA && !dateB) return -1;
+            if (!dateA && dateB) return 1;
+
+            // When dates are equal or missing, newest row in Google Sheet (highest index) comes first!
+            return (b.originalIndex ?? 0) - (a.originalIndex ?? 0);
+        });
 
         return filtered;
     }, [data, headers, globalSearch, filters, dbType]);
