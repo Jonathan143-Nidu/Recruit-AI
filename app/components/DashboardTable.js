@@ -1034,7 +1034,9 @@ export default function DashboardTable({ data, headers, session }) {
                                                         <span style={{ background: bg, color, padding: '3px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: '700' }}>{cell}</span>
                                                     </td>
                                                 );
-                                               // Date badge
+                                            }
+
+                                            // Date badge
                                             if (header === 'date' && cell && cell !== 'N/A') {
                                                 const parseDateObj = (val) => {
                                                     if (!val) return null;
