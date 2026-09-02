@@ -1067,6 +1067,7 @@ export default function DashboardTable({ data, headers, session }) {
                                                     const d = new Date(str);
                                                     return isNaN(d.getTime()) ? null : d;
                                                 };
+                                                const d = parseDateObj(cell);
                                                 const formatted = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : cell.toString();
                                                 return (
                                                     <td key={j} style={{ padding: '10px 12px' }}>
