@@ -244,16 +244,24 @@ export default function DashboardTable({ data, headers, session }) {
                     const d = new Date((dateNum - 25569) * 86400 * 1000);
                     return isNaN(d.getTime()) ? null : d;
                 }
-                // US Format MM/DD/YYYY
-                if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
-                    const parts = str.split('/');
-                    const month = parseInt(parts[0], 10);
-                    const day = parseInt(parts[1], 10);
+                // Smart US Date Parser (MM/DD/YYYY or DD/MM/YYYY)
+                if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}$/.test(str)) {
+                    const parts = str.split(/[\/-]/);
+                    let p1 = parseInt(parts[0], 10);
+                    let p2 = parseInt(parts[1], 10);
                     const year = parseInt(parts[2], 10);
-                    if (month >= 1 && month <= 12) {
-                        const d = new Date(year, month - 1, day);
+
+                    if (p2 > 12) {
+                        const d = new Date(year, p1 - 1, p2);
                         return isNaN(d.getTime()) ? null : d;
                     }
+                    if (p1 > 12) {
+                        const d = new Date(year, p2 - 1, p1);
+                        return isNaN(d.getTime()) ? null : d;
+                    }
+                    // Default US MM/DD/YYYY format
+                    const d = new Date(year, p1 - 1, p2);
+                    return isNaN(d.getTime()) ? null : d;
                 }
                 const d = new Date(str);
                 return isNaN(d.getTime()) ? null : d;
@@ -1026,9 +1034,7 @@ export default function DashboardTable({ data, headers, session }) {
                                                         <span style={{ background: bg, color, padding: '3px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: '700' }}>{cell}</span>
                                                     </td>
                                                 );
-                                            }
-
-                                            // Date badge
+                                               // Date badge
                                             if (header === 'date' && cell && cell !== 'N/A') {
                                                 const parseDateObj = (val) => {
                                                     if (!val) return null;
@@ -1039,21 +1045,28 @@ export default function DashboardTable({ data, headers, session }) {
                                                         const d = new Date((dateNum - 25569) * 86400 * 1000);
                                                         return isNaN(d.getTime()) ? null : d;
                                                     }
-                                                    // Explicit US Format MM/DD/YYYY parser
-                                                    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
-                                                        const parts = str.split('/');
-                                                        const month = parseInt(parts[0], 10);
-                                                        const day = parseInt(parts[1], 10);
+                                                    // Smart US Date Parser (MM/DD/YYYY or DD/MM/YYYY)
+                                                    if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}$/.test(str)) {
+                                                        const parts = str.split(/[\/-]/);
+                                                        let p1 = parseInt(parts[0], 10);
+                                                        let p2 = parseInt(parts[1], 10);
                                                         const year = parseInt(parts[2], 10);
-                                                        if (month >= 1 && month <= 12) {
-                                                            const d = new Date(year, month - 1, day);
+
+                                                        if (p2 > 12) {
+                                                            const d = new Date(year, p1 - 1, p2);
                                                             return isNaN(d.getTime()) ? null : d;
                                                         }
+                                                        if (p1 > 12) {
+                                                            const d = new Date(year, p2 - 1, p1);
+                                                            return isNaN(d.getTime()) ? null : d;
+                                                        }
+                                                        // Default US MM/DD/YYYY format
+                                                        const d = new Date(year, p1 - 1, p2);
+                                                        return isNaN(d.getTime()) ? null : d;
                                                     }
                                                     const d = new Date(str);
                                                     return isNaN(d.getTime()) ? null : d;
                                                 };
-                                                const d = parseDateObj(cell);
                                                 const formatted = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : cell.toString();
                                                 return (
                                                     <td key={j} style={{ padding: '10px 12px' }}>
