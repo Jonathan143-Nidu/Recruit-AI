@@ -41,6 +41,107 @@ export default function DashboardTable({ data, headers, session }) {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [showUserMenu]);
 
+    const effectiveHeaders = dbType === 'master' ? [
+        "Name", "Date", "Subject", "Role", "EXP", "Visa", "Location", "Skills", "Resume Says", "Email", "Phone", "DOB", "PPN", "LinkedIn", "Drive Folder", "Resume", "Sender", "Thread", "Processed By", "Fingerprint"
+    ] : headers;
+
+    // Helper to check if a string looks like a Visa status (Strict Word Boundaries to avoid 'Lead' matching 'ead')
+    const isVisaValue = (val) => {
+        if (!val) return false;
+        const v = val.toString().toLowerCase().trim();
+        if (v.includes('lead') || v.includes('report') || v.includes('manager') || v.includes('developer') || v.includes('architect') || v.includes('engineer')) return false;
+        const clean = v.replace(/[^a-z0-9]/g, '');
+        return clean === 'h1' || clean === 'h1b' || clean.includes('h1b') || clean === 'gc' || clean.includes('greencard') || clean.includes('h4') || clean.includes('usc') || clean.includes('opt') || clean.includes('cpt') || clean.includes('citizen') || clean === 'ead' || clean === 'h4ead';
+    };
+
+    // Smart dynamic cell resolver ONLY for Master DB tab matching attributes across all row formats
+    const getMasterDbCell = (row, h, j) => {
+        if (!row || !Array.isArray(row)) return '';
+        const hl = h ? h.toLowerCase() : '';
+        const strVal = (val) => (val !== null && val !== undefined) ? val.toString() : '';
+
+        // Find attribute indices dynamically within row
+        const emailIndex = row.findIndex(cell => cell && typeof cell === 'string' && cell.includes('@') && !cell.startsWith('http'));
+        const phoneIndex = row.findIndex((cell, idx) => idx !== emailIndex && cell && typeof cell === 'string' && (cell.includes('+1') || /^\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}$/.test(cell.trim())));
+        const dobIndex = row.findIndex((cell, idx) => idx >= 7 && cell && typeof cell === 'string' && (/\b(19\d{2}|20\d{2})\b/.test(cell) || /\d{1,2}\/\d{1,2}\/\d{2,4}/.test(cell)) && !cell.includes('@') && !cell.startsWith('http'));
+        const visaIndex = row.findIndex(cell => isVisaValue(cell));
+        const expValue = row.find(c => c && /^\d{1,2}(\.\d)?$/.test(c.toString().trim()));
+
+        // Rows 1-225 layout vs Rows 226+ layout
+        const isStandardLayout = row.length >= 13 && (isVisaValue(row[5]) || isVisaValue(row[4]));
+
+        if (isStandardLayout) {
+            const hasVisaAt5 = isVisaValue(row[5]);
+            if (hasVisaAt5) {
+                if (hl === 'name') return strVal(row[0]);
+                if (hl === 'date') return strVal(row[1]);
+                if (hl === 'subject') return strVal(row[2]);
+                if (hl === 'role') return strVal(row[3]);
+                if (hl.includes('exp')) return strVal(row[4]);
+                if (hl === 'visa') return strVal(row[5]);
+                if (hl === 'location') return strVal(row[6]);
+                if (hl === 'skills') return strVal(row[7]);
+                if (hl.includes('resume says')) return strVal(row[8]);
+                if (hl === 'email') return strVal(row[9]);
+                if (hl === 'phone') return strVal(row[10]);
+                if (hl === 'dob') return strVal(row[11]);
+                if (hl === 'ppn' || hl.includes('passport') || hl === 'code') return strVal(row[12]);
+                if (hl === 'linkedin') return strVal(row[13]);
+                if (hl.includes('drive')) return strVal(row[14]);
+                if (hl === 'resume') return strVal(row[15]);
+                if (hl === 'sender') return strVal(row[16]);
+                if (hl === 'thread') return strVal(row[17]);
+            } else {
+                if (hl === 'name') return strVal(row[0]);
+                if (hl === 'date') return strVal(row[8] || row[1]);
+                if (hl === 'subject') return strVal(row[1]);
+                if (hl === 'role') return strVal(row[2]);
+                if (hl.includes('exp')) return strVal(row[3]);
+                if (hl === 'visa') return strVal(row[4]);
+                if (hl === 'location') return strVal(row[5]);
+                if (hl === 'skills') return '';
+                if (hl.includes('resume says')) return strVal(row[6]);
+                if (hl === 'email') return strVal(row[6]);
+                if (hl === 'phone') return strVal(row[7]);
+                if (hl === 'dob') return strVal(row[8]);
+                if (hl === 'ppn' || hl.includes('passport') || hl === 'code') return strVal(row[9]);
+                if (hl === 'linkedin') return strVal(row[10] || row[9]);
+                if (hl.includes('drive')) return strVal(row[11] || row[10]);
+                if (hl === 'resume') return strVal(row[12] || row[11]);
+                if (hl === 'sender') return strVal(row[13] || row[12]);
+                if (hl === 'thread') return strVal(row[14] || row[13]);
+            }
+        } else {
+            // Rows 226+ layout smart resolver
+            if (hl === 'name') {
+                const col0 = strVal(row[0]);
+                if (col0.includes('Match Report') || col0.includes('RTR') || col0.includes('RE:') || col0.includes('Profile')) {
+                    const match = col0.match(/(?:-|–|:)\s*([A-Za-z\s]+)$/);
+                    return match ? match[1].trim() : col0;
+                }
+                return col0;
+            }
+            if (hl === 'date') return strVal(row[1]); // Col B in Google Sheet!
+            if (hl === 'subject') return strVal(row[0]);
+            if (hl === 'role') return strVal(row[1]);
+            if (hl.includes('exp')) return strVal(expValue || row[2]);
+            if (hl === 'visa') return visaIndex !== -1 ? strVal(row[visaIndex]) : strVal(row[3]);
+            if (hl === 'location') return strVal(row.find((c, idx) => idx >= 3 && idx <= 6 && typeof c === 'string' && (c.includes(',') || c.includes('TX') || c.includes('NC') || c.includes('CA') || c.includes('NJ') || c.includes('GA') || c.includes('FL') || c.includes('MA'))) || row[4]);
+            if (hl === 'skills') return strVal(row[5] || row[3]);
+            if (hl.includes('resume says')) return strVal(row[6] || row[4]);
+            if (hl === 'email') return strVal(emailIndex !== -1 ? row[emailIndex] : row[7]);
+            if (hl === 'phone') return strVal(phoneIndex !== -1 ? row[phoneIndex] : row[8]);
+            if (hl === 'dob') return strVal(dobIndex !== -1 ? row[dobIndex] : '');
+            if (hl === 'ppn' || hl.includes('passport') || hl === 'code') return strVal(row.find((c, idx) => idx >= 7 && idx <= 10 && typeof c === 'string' && /^[A-Za-z0-9]{7,10}$/.test(c.trim()) && !c.includes('@')));
+            if (hl === 'linkedin') return strVal(row.find(c => c && typeof c === 'string' && c.includes('linkedin')) || row[9]);
+            if (hl.includes('drive')) return strVal(row.find(c => c && typeof c === 'string' && c.includes('drive')) || row[10]);
+            if (hl === 'resume') return strVal(row.find(c => c && typeof c === 'string' && c.includes('view')) || row[11]);
+            if (hl === 'sender') return strVal(row.find((c, idx) => idx >= 10 && typeof c === 'string' && c.includes('@')) || row[12]);
+            if (hl === 'thread') return strVal(row.find(c => c && typeof c === 'string' && c.includes('mail.google.com')) || row[13]);
+        }
+        return strVal(row[j]);
+    };
+
     // Filter Data Logic
     const filteredData = useMemo(() => {
         // Find indices dynamically for search
@@ -396,106 +497,6 @@ export default function DashboardTable({ data, headers, session }) {
         if (h.includes('thread')) return 'Thread';
         if (h.includes('linkedin')) return 'LinkedIn';
         return 'Link';
-    };
-    const effectiveHeaders = dbType === 'master' ? [
-        "Name", "Date", "Subject", "Role", "EXP", "Visa", "Location", "Skills", "Resume Says", "Email", "Phone", "DOB", "PPN", "LinkedIn", "Drive Folder", "Resume", "Sender", "Thread", "Processed By", "Fingerprint"
-    ] : headers;
-
-    // Helper to check if a string looks like a Visa status (Strict Word Boundaries to avoid 'Lead' matching 'ead')
-    const isVisaValue = (val) => {
-        if (!val) return false;
-        const v = val.toString().toLowerCase().trim();
-        if (v.includes('lead') || v.includes('report') || v.includes('manager') || v.includes('developer') || v.includes('architect') || v.includes('engineer')) return false;
-        const clean = v.replace(/[^a-z0-9]/g, '');
-        return clean === 'h1' || clean === 'h1b' || clean.includes('h1b') || clean === 'gc' || clean.includes('greencard') || clean.includes('h4') || clean.includes('usc') || clean.includes('opt') || clean.includes('cpt') || clean.includes('citizen') || clean === 'ead' || clean === 'h4ead';
-    };
-
-    // Smart dynamic cell resolver ONLY for Master DB tab matching attributes across all row formats
-    const getMasterDbCell = (row, h, j) => {
-        if (!row || !Array.isArray(row)) return '';
-        const hl = h ? h.toLowerCase() : '';
-        const strVal = (val) => (val !== null && val !== undefined) ? val.toString() : '';
-
-        // Find attribute indices dynamically within row
-        const emailIndex = row.findIndex(cell => cell && typeof cell === 'string' && cell.includes('@') && !cell.startsWith('http'));
-        const phoneIndex = row.findIndex((cell, idx) => idx !== emailIndex && cell && typeof cell === 'string' && (cell.includes('+1') || /^\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}$/.test(cell.trim())));
-        const dobIndex = row.findIndex((cell, idx) => idx >= 7 && cell && typeof cell === 'string' && (/\b(19\d{2}|20\d{2})\b/.test(cell) || /\d{1,2}\/\d{1,2}\/\d{2,4}/.test(cell)) && !cell.includes('@') && !cell.startsWith('http'));
-        const visaIndex = row.findIndex(cell => isVisaValue(cell));
-        const expValue = row.find(c => c && /^\d{1,2}(\.\d)?$/.test(c.toString().trim()));
-
-        // Rows 1-225 layout vs Rows 226+ layout
-        const isStandardLayout = row.length >= 13 && (isVisaValue(row[5]) || isVisaValue(row[4]));
-
-        if (isStandardLayout) {
-            const hasVisaAt5 = isVisaValue(row[5]);
-            if (hasVisaAt5) {
-                if (hl === 'name') return strVal(row[0]);
-                if (hl === 'date') return strVal(row[1]);
-                if (hl === 'subject') return strVal(row[2]);
-                if (hl === 'role') return strVal(row[3]);
-                if (hl.includes('exp')) return strVal(row[4]);
-                if (hl === 'visa') return strVal(row[5]);
-                if (hl === 'location') return strVal(row[6]);
-                if (hl === 'skills') return strVal(row[7]);
-                if (hl.includes('resume says')) return strVal(row[8]);
-                if (hl === 'email') return strVal(row[9]);
-                if (hl === 'phone') return strVal(row[10]);
-                if (hl === 'dob') return strVal(row[11]);
-                if (hl === 'ppn' || hl.includes('passport') || hl === 'code') return strVal(row[12]);
-                if (hl === 'linkedin') return strVal(row[13]);
-                if (hl.includes('drive')) return strVal(row[14]);
-                if (hl === 'resume') return strVal(row[15]);
-                if (hl === 'sender') return strVal(row[16]);
-                if (hl === 'thread') return strVal(row[17]);
-            } else {
-                if (hl === 'name') return strVal(row[0]);
-                if (hl === 'date') return strVal(row[8] || row[1]);
-                if (hl === 'subject') return strVal(row[1]);
-                if (hl === 'role') return strVal(row[2]);
-                if (hl.includes('exp')) return strVal(row[3]);
-                if (hl === 'visa') return strVal(row[4]);
-                if (hl === 'location') return strVal(row[5]);
-                if (hl === 'skills') return '';
-                if (hl.includes('resume says')) return strVal(row[6]);
-                if (hl === 'email') return strVal(row[6]);
-                if (hl === 'phone') return strVal(row[7]);
-                if (hl === 'dob') return strVal(row[8]);
-                if (hl === 'ppn' || hl.includes('passport') || hl === 'code') return strVal(row[9]);
-                if (hl === 'linkedin') return strVal(row[10] || row[9]);
-                if (hl.includes('drive')) return strVal(row[11] || row[10]);
-                if (hl === 'resume') return strVal(row[12] || row[11]);
-                if (hl === 'sender') return strVal(row[13] || row[12]);
-                if (hl === 'thread') return strVal(row[14] || row[13]);
-            }
-        } else {
-            // Rows 226+ layout smart resolver
-            if (hl === 'name') {
-                const col0 = strVal(row[0]);
-                if (col0.includes('Match Report') || col0.includes('RTR') || col0.includes('RE:') || col0.includes('Profile')) {
-                    const match = col0.match(/(?:-|–|:)\s*([A-Za-z\s]+)$/);
-                    return match ? match[1].trim() : col0;
-                }
-                return col0;
-            }
-            if (hl === 'date') return strVal(row[1]); // Col B in Google Sheet!
-            if (hl === 'subject') return strVal(row[0]);
-            if (hl === 'role') return strVal(row[1]);
-            if (hl.includes('exp')) return strVal(expValue || row[2]);
-            if (hl === 'visa') return visaIndex !== -1 ? strVal(row[visaIndex]) : strVal(row[3]);
-            if (hl === 'location') return strVal(row.find((c, idx) => idx >= 3 && idx <= 6 && typeof c === 'string' && (c.includes(',') || c.includes('TX') || c.includes('NC') || c.includes('CA') || c.includes('NJ') || c.includes('GA') || c.includes('FL') || c.includes('MA'))) || row[4]);
-            if (hl === 'skills') return strVal(row[5] || row[3]);
-            if (hl.includes('resume says')) return strVal(row[6] || row[4]);
-            if (hl === 'email') return strVal(emailIndex !== -1 ? row[emailIndex] : row[7]);
-            if (hl === 'phone') return strVal(phoneIndex !== -1 ? row[phoneIndex] : row[8]);
-            if (hl === 'dob') return strVal(dobIndex !== -1 ? row[dobIndex] : '');
-            if (hl === 'ppn' || hl.includes('passport') || hl === 'code') return strVal(row.find((c, idx) => idx >= 7 && idx <= 10 && typeof c === 'string' && /^[A-Za-z0-9]{7,10}$/.test(c.trim()) && !c.includes('@')));
-            if (hl === 'linkedin') return strVal(row.find(c => c && typeof c === 'string' && c.includes('linkedin')) || row[9]);
-            if (hl.includes('drive')) return strVal(row.find(c => c && typeof c === 'string' && c.includes('drive')) || row[10]);
-            if (hl === 'resume') return strVal(row.find(c => c && typeof c === 'string' && c.includes('view')) || row[11]);
-            if (hl === 'sender') return strVal(row.find((c, idx) => idx >= 10 && typeof c === 'string' && c.includes('@')) || row[12]);
-            if (hl === 'thread') return strVal(row.find(c => c && typeof c === 'string' && c.includes('mail.google.com')) || row[13]);
-        }
-        return strVal(row[j]);
     };
 
     // Helper to determine link label
