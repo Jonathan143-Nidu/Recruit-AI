@@ -781,7 +781,7 @@ async function appendToSheet(values, customSheetId) {
     try {
         const headerCheck = await sheets.spreadsheets.values.get({
             spreadsheetId,
-            range: 'Sheet1!A1',
+            range: 'A1',
         });
 
         if (!headerCheck.data.values || headerCheck.data.values.length === 0) {
@@ -791,7 +791,7 @@ async function appendToSheet(values, customSheetId) {
             ];
             await sheets.spreadsheets.values.append({
                 spreadsheetId,
-                range: 'Sheet1!A1',
+                range: 'A1',
                 valueInputOption: 'USER_ENTERED',
                 requestBody: { values: [headers] },
             });
@@ -802,7 +802,7 @@ async function appendToSheet(values, customSheetId) {
 
     await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: 'Sheet1!A1', // Appends to the end of Sheet1
+        range: 'A1', // Appends to the end of active sheet
         valueInputOption: 'USER_ENTERED',
         requestBody: {
             values: [values],

@@ -25,7 +25,7 @@ export default async function Home({ searchParams }) {
   try {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: targetSheetId,
-      range: 'Sheet1!A:Z', // Fetch all potential columns
+      range: 'A:Z', // Fetch all rows and columns from active sheet (All Candidates)
       valueRenderOption: 'FORMULA', // Fetch formulas to parse HYPERLINKs
     });
     rows = response.data.values || [];
