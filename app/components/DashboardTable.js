@@ -238,11 +238,22 @@ export default function DashboardTable({ data, headers, session }) {
             const parseDate = (val) => {
                 if (!val || val === 'N/A') return null;
                 const str = val.toString().trim();
-                // Google Sheets Date Serial Number (e.g. 46266 = Sept 1, 2026)
+                // Google Sheets Date Serial Number
                 if (!isNaN(str) && Number(str) > 30000 && Number(str) < 70000) {
                     const dateNum = Number(str);
-                    const d = new Date((dateNum - 25569) * 86400 * 1000);
-                    return isNaN(d.getTime()) ? null : d;
+                    const rawDate = new Date((dateNum - 25569) * 86400 * 1000);
+                    if (isNaN(rawDate.getTime())) return null;
+
+                    const month = rawDate.getUTCMonth() + 1;
+                    const day = rawDate.getUTCDate();
+                    const year = rawDate.getUTCFullYear();
+
+                    // If Google Sheet locale flipped US MM/DD into DD/MM (e.g. Feb 9 from 09/02/2026)
+                    if (year === 2026 && month <= 8 && day >= 1 && day <= 12) {
+                        const swapped = new Date(year, day - 1, month);
+                        if (!isNaN(swapped.getTime())) return swapped;
+                    }
+                    return rawDate;
                 }
                 // Smart US Date Parser (MM/DD/YYYY or DD/MM/YYYY)
                 if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}$/.test(str)) {
@@ -1044,8 +1055,19 @@ export default function DashboardTable({ data, headers, session }) {
                                                     // Google Sheets Date Serial Number
                                                     if (!isNaN(str) && Number(str) > 30000 && Number(str) < 70000) {
                                                         const dateNum = Number(str);
-                                                        const d = new Date((dateNum - 25569) * 86400 * 1000);
-                                                        return isNaN(d.getTime()) ? null : d;
+                                                        const rawDate = new Date((dateNum - 25569) * 86400 * 1000);
+                                                        if (isNaN(rawDate.getTime())) return null;
+
+                                                        const month = rawDate.getUTCMonth() + 1;
+                                                        const day = rawDate.getUTCDate();
+                                                        const year = rawDate.getUTCFullYear();
+
+                                                        // If Google Sheet locale flipped US MM/DD into DD/MM (e.g. Feb 9 from 09/02/2026)
+                                                        if (year === 2026 && month <= 8 && day >= 1 && day <= 12) {
+                                                            const swapped = new Date(year, day - 1, month);
+                                                            if (!isNaN(swapped.getTime())) return swapped;
+                                                        }
+                                                        return rawDate;
                                                     }
                                                     // Smart US Date Parser (MM/DD/YYYY or DD/MM/YYYY)
                                                     if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}$/.test(str)) {
