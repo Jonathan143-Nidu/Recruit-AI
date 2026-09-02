@@ -127,13 +127,39 @@ export default function DashboardTable({ data, headers, session }) {
 
         // [SMART SORT] Interleave candidates by Date (Newest First), then fallback to Newest Google Sheet Row First
         filtered.sort((a, b) => {
+            const getRawDate = (row) => {
+                if (dbType === 'master') {
+                    return getMasterDbCell(row, 'date');
+                }
+                return dateIdx !== -1 ? row[dateIdx] : null;
+            };
+
             const parseDate = (val) => {
                 if (!val || val === 'N/A') return null;
-                const d = new Date(val);
+                const str = val.toString().trim();
+                // Google Sheets Date Serial Number (e.g. 46266 = Sept 1, 2026)
+                if (!isNaN(str) && Number(str) > 30000 && Number(str) < 70000) {
+                    const dateNum = Number(str);
+                    const d = new Date((dateNum - 25569) * 86400 * 1000);
+                    return isNaN(d.getTime()) ? null : d;
+                }
+                // US Format MM/DD/YYYY
+                if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
+                    const parts = str.split('/');
+                    const month = parseInt(parts[0], 10);
+                    const day = parseInt(parts[1], 10);
+                    const year = parseInt(parts[2], 10);
+                    if (month >= 1 && month <= 12) {
+                        const d = new Date(year, month - 1, day);
+                        return isNaN(d.getTime()) ? null : d;
+                    }
+                }
+                const d = new Date(str);
                 return isNaN(d.getTime()) ? null : d;
             };
-            const dateA = dateIdx !== -1 ? parseDate(a[dateIdx]) : null;
-            const dateB = dateIdx !== -1 ? parseDate(b[dateIdx]) : null;
+
+            const dateA = parseDate(getRawDate(a));
+            const dateB = parseDate(getRawDate(b));
 
             if (dateA && dateB) {
                 if (dateB.getTime() !== dateA.getTime()) {
